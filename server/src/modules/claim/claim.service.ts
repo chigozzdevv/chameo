@@ -17,6 +17,16 @@ export async function processClaim(campaignId: string, token: string, walletAddr
   if (!tokenResult.valid) throw new BadRequestError(tokenResult.error || "Invalid token");
 
   const identityHash = tokenResult.identityHash!;
+
+  const existingClaim = await claimsCollection().findOne({ campaignId, identityHash });
+  if (existingClaim && existingClaim.signature) {
+    return {
+      signature: existingClaim.signature,
+      amount: existingClaim.amount,
+      compliance: existingClaim.compliance
+    };
+  }
+
   const campaign = await getCampaignDoc(campaignId);
 
   if (!campaign) throw new BadRequestError("Campaign not found");
@@ -26,7 +36,6 @@ export async function processClaim(campaignId: string, token: string, walletAddr
   if (campaign.claimCount >= campaign.maxClaims) throw new BadRequestError("All claims exhausted");
   if (!(await isEligible(campaignId, identityHash))) throw new BadRequestError("Not eligible for this campaign");
 
-  // Atomic check-and-insert to prevent race conditions
   const insertResult = await claimsCollection().updateOne(
     { campaignId, identityHash },
     {

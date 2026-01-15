@@ -237,9 +237,9 @@ async function fetchUnspentUtxos(
     const data = await fetchEncryptedUtxos(offset, offset + FETCH_BATCH_SIZE);
 
     for (const enc of data.encrypted_outputs || []) {
-      let utxo = decryptUtxo(Buffer.from(enc, "hex"), encryptionKey, keypair);
+      let utxo = decryptUtxo(Buffer.from(enc, "hex"), encryptionKey, keypair, encryptionKeyV1);
       if (!utxo && encryptionKeyV1 && keypairV1) {
-        utxo = decryptUtxo(Buffer.from(enc, "hex"), encryptionKey, keypairV1, encryptionKeyV1);
+        utxo = decryptUtxo(Buffer.from(enc, "hex"), encryptionKeyV1, keypairV1);
       }
       if (utxo && utxo.amount.toNumber() > 0) {
         decryptedUtxos.push({ utxo, encryptedOutput: enc });
