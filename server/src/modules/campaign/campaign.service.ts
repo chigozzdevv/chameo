@@ -170,6 +170,21 @@ export async function updateCampaignImage(id: string, userId: string, imageUrl: 
   await col.updateOne({ id }, { $set: { imageUrl } });
 }
 
+export async function checkAndTriggerDispute(id: string): Promise<void> {
+  const col = campaignsCollection();
+  const doc = await col.findOne({ id });
+
+  if (!doc) throw new NotFoundError("Campaign not found");
+  if (doc.type !== "escrow") return;
+  if (doc.status !== "active") return;
+  if (!doc.winnersDeadline) return;
+
+  const now = Date.now() / 1000;
+  if (now > doc.winnersDeadline && (!doc.selectedWinners || doc.selectedWinners.length === 0)) {
+    await col.updateOne({ id }, { $set: { status: "dispute" } });
+  }
+}
+
 function toPublic(doc: CampaignDoc): CampaignPublic {
   return {
     id: doc.id,

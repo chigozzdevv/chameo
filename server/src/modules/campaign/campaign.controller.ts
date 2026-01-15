@@ -176,4 +176,14 @@ router.post("/:id/upload-image", authMiddleware, async (req: Request<{ id: strin
   }
 });
 
+router.post("/:id/check-dispute", async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    await campaignService.checkAndTriggerDispute(req.params.id);
+    const campaign = await campaignService.getCampaign(req.params.id);
+    res.json({ success: true, status: campaign?.status });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
