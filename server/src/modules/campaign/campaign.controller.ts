@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { isValidAuthMethod, BadRequestError, ForbiddenError, NotFoundError } from "@/shared";
 import { authMiddleware } from "@/modules/auth";
+import { trackEvent } from "@/modules/analytics";
 import * as campaignService from "./campaign.service";
 import { getCampaignWalletPublicKey } from "./wallet.service";
 import { sendBatchNotifications } from "@/modules/claim/notification.service";
@@ -9,21 +10,28 @@ const router = Router();
 
 router.post("/", authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, authMethod, payoutAmount, maxClaims, expiresAt, recipients, requireCompliance } = req.body;
+    const { name, description, type, authMethod, payoutAmount, maxClaims, expiresAt, winnersDeadline, recipients, requireCompliance } = req.body;
 
     if (!name || name.length < 2) throw new BadRequestError("Campaign name required");
+    if (!["payout", "escrow"].includes(type)) throw new BadRequestError("Invalid type");
     if (!isValidAuthMethod(authMethod)) throw new BadRequestError("Invalid authMethod");
     if (!payoutAmount || payoutAmount <= 0) throw new BadRequestError("Invalid payoutAmount");
     if (!maxClaims || maxClaims <= 0) throw new BadRequestError("Invalid maxClaims");
     if (!expiresAt || expiresAt <= Date.now() / 1000) throw new BadRequestError("Invalid expiresAt");
+    if (type === "escrow" && (!winnersDeadline || winnersDeadline >= expiresAt)) {
+      throw new BadRequestError("winnersDeadline must be before expiresAt");
+    }
     if (!Array.isArray(recipients) || recipients.length === 0) throw new BadRequestError("recipients required");
 
     const result = await campaignService.createCampaign(req.user!.userId, req.user!.orgSlug, {
       name,
+      description,
+      type,
       authMethod,
       payoutAmount,
       maxClaims,
       expiresAt,
+      winnersDeadline,
       recipients,
       requireCompliance,
     });
@@ -53,6 +61,9 @@ router.get("/:id", async (req: Request<{ id: string }>, res: Response, next: Nex
   try {
     const campaign = await campaignService.getCampaign(req.params.id);
     if (!campaign) throw new NotFoundError("Campaign not found");
+    
+    await trackEvent({ campaignId: req.params.id, eventType: "view" });
+    
     res.json({ success: true, campaign });
   } catch (error) {
     next(error);
@@ -136,6 +147,30 @@ router.post("/:id/close", authMiddleware, async (req: Request<{ id: string }>, r
 
     const result = await campaignService.closeCampaign(id, req.user!.userId, reclaimAddress);
     res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/:id/select-winners", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    const { winners } = req.body;
+    if (!Array.isArray(winners) || winners.length === 0) throw new BadRequestError("winners required");
+
+    const result = await campaignService.selectWinners(req.params.id, req.user!.userId, winners);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/:id/upload-image", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    const { imageUrl } = req.body;
+    if (!imageUrl) throw new BadRequestError("imageUrl required");
+
+    await campaignService.updateCampaignImage(req.params.id, req.user!.userId, imageUrl);
+    res.json({ success: true, imageUrl });
   } catch (error) {
     next(error);
   }

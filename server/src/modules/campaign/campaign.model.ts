@@ -2,31 +2,41 @@ import { Collection } from "mongodb";
 import { getDb } from "@/config";
 
 export type AuthMethod = "email" | "phone" | "twitter" | "discord" | "github" | "telegram";
+export type CampaignType = "payout" | "escrow";
+export type CampaignStatus = "active" | "winners-announced" | "dispute" | "closed";
 
 export interface CampaignDoc {
   id: string;
   userId: string;
   orgSlug: string;
   name: string;
+  description?: string;
+  imageUrl?: string;
+  type: CampaignType;
   authMethod: AuthMethod;
   payoutAmount: number;
   maxClaims: number;
   claimCount: number;
   expiresAt: number;
+  winnersDeadline?: number;
   funded: boolean;
   fundedAmount: number;
   requireCompliance: boolean;
   eligibleHashes: string[];
-  status: "active" | "closed";
+  selectedWinners?: string[];
+  status: CampaignStatus;
   createdAt: number;
 }
 
 export interface CreateCampaignInput {
   name: string;
+  description?: string;
+  type: CampaignType;
   authMethod: AuthMethod;
   payoutAmount: number;
   maxClaims: number;
   expiresAt: number;
+  winnersDeadline?: number;
   recipients: string[];
   requireCompliance?: boolean;
 }
@@ -34,16 +44,22 @@ export interface CreateCampaignInput {
 export interface CampaignPublic {
   id: string;
   name: string;
+  description?: string;
+  imageUrl?: string;
   orgSlug: string;
+  type: CampaignType;
   authMethod: AuthMethod;
   payoutAmount: number;
   maxClaims: number;
   claimCount: number;
   expiresAt: number;
+  winnersDeadline?: number;
   funded: boolean;
   fundedAmount: number;
   requireCompliance: boolean;
-  status: "active" | "closed";
+  participantCount: number;
+  winnersCount?: number;
+  status: CampaignStatus;
 }
 
 export function campaignsCollection(): Collection<CampaignDoc> {

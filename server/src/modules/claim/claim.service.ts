@@ -1,6 +1,7 @@
 import { env } from "@/config";
 import { withdraw, type WalletKeys } from "@/lib/privacy-cash";
 import { BadRequestError, ConflictError } from "@/shared";
+import { trackEvent } from "@/modules/analytics";
 import { claimsCollection } from "./claim.model";
 import { getCampaignDoc, isEligible, incrementClaimCount, deductFunds, getCampaignWalletKeys } from "@/modules/campaign";
 import { checkWalletCompliance, type ComplianceCheckResult } from "@/modules/compliance";
@@ -36,6 +37,11 @@ export async function processClaim(campaignId: string, token: string, walletAddr
   if (campaign.claimCount >= campaign.maxClaims) throw new BadRequestError("All claims exhausted");
   if (!(await isEligible(campaignId, identityHash))) throw new BadRequestError("Not eligible for this campaign");
 
+  if (campaign.type === "escrow") {
+    if (campaign.status !== "winners-announced") throw new BadRequestError("Winners not announced yet");
+    if (!campaign.selectedWinners?.includes(identityHash)) throw new BadRequestError("Not selected as winner");
+  }
+
   const insertResult = await claimsCollection().updateOne(
     { campaignId, identityHash },
     {
@@ -63,9 +69,12 @@ export async function processClaim(campaignId: string, token: string, walletAddr
       compliance = await checkWalletCompliance(walletAddress);
       if (!compliance.isCompliant) {
         await claimsCollection().deleteOne({ campaignId, identityHash });
+        await trackEvent({ campaignId, eventType: "claim-failure", identityHash, metadata: { reason: "compliance" } });
         throw new BadRequestError(compliance.blockedReason || "Wallet failed compliance check");
       }
     }
+
+    await trackEvent({ campaignId, eventType: "claim-attempt", identityHash });
 
     const keys = await getCampaignWalletKeys(campaignId);
     const result = await withdraw(keys, campaign.payoutAmount, walletAddress);
@@ -79,9 +88,12 @@ export async function processClaim(campaignId: string, token: string, walletAddr
     await deductFunds(campaignId, campaign.payoutAmount);
     await consumeVerificationToken(token);
 
+    await trackEvent({ campaignId, eventType: "claim-success", identityHash });
+
     return { signature: result.signature, amount: campaign.payoutAmount, compliance };
   } catch (error) {
     await claimsCollection().deleteOne({ campaignId, identityHash, signature: "" });
+    await trackEvent({ campaignId, eventType: "claim-failure", identityHash, metadata: { error: String(error) } });
     throw error;
   }
 }

@@ -18,15 +18,19 @@ export async function createCampaign(
     userId,
     orgSlug,
     name: input.name,
+    description: input.description,
+    type: input.type || "payout",
     authMethod: input.authMethod,
     payoutAmount: input.payoutAmount,
     maxClaims: input.maxClaims,
     claimCount: 0,
     expiresAt: input.expiresAt,
+    winnersDeadline: input.winnersDeadline,
     funded: false,
     fundedAmount: 0,
     requireCompliance: input.requireCompliance || false,
     eligibleHashes: identityHashes,
+    selectedWinners: input.type === "escrow" ? [] : undefined,
     status: "active",
     createdAt: Date.now(),
   };
@@ -132,17 +136,62 @@ export async function closeCampaign(id: string, userId: string, reclaimAddress: 
   return { reclaimedAmount: 0 };
 }
 
+export async function selectWinners(id: string, userId: string, winners: string[]): Promise<{ winnersCount: number }> {
+  const col = campaignsCollection();
+  const doc = await col.findOne({ id });
+
+  if (!doc) throw new NotFoundError("Campaign not found");
+  if (doc.userId !== userId) throw new ForbiddenError("Not authorized");
+  if (doc.type !== "escrow") throw new BadRequestError("Only escrow campaigns can select winners");
+  if (doc.status !== "active") throw new BadRequestError("Campaign not active");
+  if (!doc.winnersDeadline || Date.now() / 1000 > doc.winnersDeadline) {
+    throw new BadRequestError("Winners deadline passed");
+  }
+
+  const winnerHashes = winners.map(w => hashIdentity(doc.authMethod, w).toString("hex"));
+  const invalidWinners = winnerHashes.filter(h => !doc.eligibleHashes.includes(h));
+  if (invalidWinners.length > 0) throw new BadRequestError("Some winners not eligible");
+
+  await col.updateOne(
+    { id },
+    { $set: { selectedWinners: winnerHashes, status: "winners-announced" } }
+  );
+
+  return { winnersCount: winnerHashes.length };
+}
+
+export async function updateCampaignImage(id: string, userId: string, imageUrl: string): Promise<void> {
+  const col = campaignsCollection();
+  const doc = await col.findOne({ id });
+
+  if (!doc) throw new NotFoundError("Campaign not found");
+  if (doc.userId !== userId) throw new ForbiddenError("Not authorized");
+
+  await col.updateOne({ id }, { $set: { imageUrl } });
+}
+
 function toPublic(doc: CampaignDoc): CampaignPublic {
   return {
     id: doc.id,
     name: doc.name,
+    description: doc.description,
+    imageUrl: doc.imageUrl,
     orgSlug: doc.orgSlug,
+    type: doc.type,
     authMethod: doc.authMethod,
     payoutAmount: doc.payoutAmount,
     maxClaims: doc.maxClaims,
     claimCount: doc.claimCount,
     expiresAt: doc.expiresAt,
+    winnersDeadline: doc.winnersDeadline,
     funded: doc.funded,
+    fundedAmount: doc.fundedAmount,
+    requireCompliance: doc.requireCompliance,
+    participantCount: doc.eligibleHashes.length,
+    winnersCount: doc.selectedWinners?.length,
+    status: doc.status,
+  };
+}
     fundedAmount: doc.fundedAmount,
     requireCompliance: doc.requireCompliance,
     status: doc.status,

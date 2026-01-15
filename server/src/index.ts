@@ -4,6 +4,8 @@ import { logger } from "@/shared";
 import { createUserIndexes } from "@/modules/auth";
 import { createCampaignIndexes } from "@/modules/campaign";
 import { createClaimIndexes } from "@/modules/claim";
+import { createVoteIndexes } from "@/modules/voting";
+import { createAnalyticsIndexes } from "@/modules/analytics";
 import { createApp } from "./app";
 
 async function main() {
@@ -18,6 +20,8 @@ async function main() {
   await createUserIndexes();
   await createCampaignIndexes();
   await createClaimIndexes();
+  await createVoteIndexes();
+  await createAnalyticsIndexes();
 
   const app = createApp();
   const server = app.listen(env.port, () => {
