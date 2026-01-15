@@ -1,7 +1,7 @@
 import { Collection } from "mongodb";
 import { getDb } from "@/config";
 
-export type AuthMethod = "email" | "phone" | "twitter" | "discord" | "github";
+export type AuthMethod = "email" | "phone" | "twitter" | "discord" | "github" | "telegram";
 
 export interface CampaignDoc {
   id: string;

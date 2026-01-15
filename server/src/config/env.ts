@@ -58,6 +58,10 @@ export const env = {
       clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
       redirectUri: process.env.DISCORD_REDIRECT_URI || "",
     },
+    telegram: {
+      botId: process.env.TELEGRAM_BOT_ID || "",
+      botToken: process.env.TELEGRAM_BOT_TOKEN || "",
+    },
   },
   cors: {
     origin: process.env.CORS_ORIGIN || "*",

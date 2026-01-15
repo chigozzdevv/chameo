@@ -6,5 +6,5 @@ export interface SocialVerificationResult {
 
 export interface AuthProvider {
   getAuthUrl(campaignId: string, redirectUri: string): string;
-  verify(code: string, identifier?: string, campaignId?: string): Promise<SocialVerificationResult>;
+  verify(code: string, authData?: Record<string, string>): Promise<SocialVerificationResult>;
 }

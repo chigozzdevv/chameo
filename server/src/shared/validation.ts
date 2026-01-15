@@ -17,6 +17,6 @@ export function isValidPublicKey(address: string): boolean {
   }
 }
 
-export function isValidAuthMethod(method: string): method is "email" | "phone" | "twitter" | "discord" | "github" {
-  return ["email", "phone", "twitter", "discord", "github"].includes(method);
+export function isValidAuthMethod(method: string): method is "email" | "phone" | "twitter" | "discord" | "github" | "telegram" {
+  return ["email", "phone", "twitter", "discord", "github", "telegram"].includes(method);
 }
