@@ -128,4 +128,17 @@ router.post("/:id/notify", authMiddleware, async (req: Request<{ id: string }>, 
   }
 });
 
+router.post("/:id/close", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { reclaimAddress } = req.body;
+    if (!reclaimAddress) throw new BadRequestError("reclaimAddress required");
+
+    const result = await campaignService.closeCampaign(id, req.user!.userId, reclaimAddress);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

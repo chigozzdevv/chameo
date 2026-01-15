@@ -17,6 +17,7 @@ export interface CampaignDoc {
   fundedAmount: number;
   requireCompliance: boolean;
   eligibleHashes: string[];
+  status: "active" | "closed";
   createdAt: number;
 }
 
@@ -42,6 +43,7 @@ export interface CampaignPublic {
   funded: boolean;
   fundedAmount: number;
   requireCompliance: boolean;
+  status: "active" | "closed";
 }
 
 export function campaignsCollection(): Collection<CampaignDoc> {

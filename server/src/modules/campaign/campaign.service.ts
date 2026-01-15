@@ -1,8 +1,8 @@
 import { PublicKey } from "@solana/web3.js";
 import { connection } from "@/config";
-import { generateId, hashIdentity, NotFoundError, ForbiddenError } from "@/shared";
+import { generateId, hashIdentity, NotFoundError, ForbiddenError, BadRequestError } from "@/shared";
 import { campaignsCollection, type CampaignDoc, type CreateCampaignInput, type CampaignPublic } from "./campaign.model";
-import { createCampaignWallet, getCampaignPrivateBalance, getCampaignWalletPublicKey, depositToCampaign } from "./wallet.service";
+import { createCampaignWallet, getCampaignPrivateBalance, getCampaignWalletPublicKey, depositToCampaign, withdrawFromCampaign } from "./wallet.service";
 
 export async function createCampaign(
   userId: string,
@@ -27,6 +27,7 @@ export async function createCampaign(
     fundedAmount: 0,
     requireCompliance: input.requireCompliance || false,
     eligibleHashes: identityHashes,
+    status: "active",
     createdAt: Date.now(),
   };
 
@@ -110,6 +111,27 @@ export async function addRecipients(id: string, userId: string, recipients: stri
   return { added: uniqueNew.length };
 }
 
+export async function closeCampaign(id: string, userId: string, reclaimAddress: string): Promise<{ reclaimedAmount: number; signature?: string }> {
+  const col = campaignsCollection();
+  const doc = await col.findOne({ id });
+
+  if (!doc) throw new NotFoundError("Campaign not found");
+  if (doc.userId !== userId) throw new ForbiddenError("Not authorized");
+  if (doc.status === "closed") throw new BadRequestError("Campaign already closed");
+  if (doc.expiresAt > Date.now() / 1000) throw new BadRequestError("Campaign not yet expired");
+
+  const balance = await getCampaignPrivateBalance(id);
+
+  if (balance > 0) {
+    const result = await withdrawFromCampaign(id, balance, reclaimAddress);
+    await col.updateOne({ id }, { $set: { status: "closed", fundedAmount: 0 } });
+    return { reclaimedAmount: result.amount, signature: result.signature };
+  }
+
+  await col.updateOne({ id }, { $set: { status: "closed" } });
+  return { reclaimedAmount: 0 };
+}
+
 function toPublic(doc: CampaignDoc): CampaignPublic {
   return {
     id: doc.id,
@@ -123,5 +145,6 @@ function toPublic(doc: CampaignDoc): CampaignPublic {
     funded: doc.funded,
     fundedAmount: doc.fundedAmount,
     requireCompliance: doc.requireCompliance,
+    status: doc.status,
   };
 }

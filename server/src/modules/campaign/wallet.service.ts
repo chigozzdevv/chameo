@@ -1,5 +1,5 @@
 import { vault } from "@/lib/vault";
-import { generateWalletKeys, getPrivateBalance, deposit, type WalletKeys } from "@/lib/privacy-cash";
+import { generateWalletKeys, getPrivateBalance, deposit, withdraw, type WalletKeys } from "@/lib/privacy-cash";
 import { NotFoundError } from "@/shared";
 
 function vaultKey(campaignId: string): string {
@@ -31,6 +31,11 @@ export async function getCampaignPrivateBalance(campaignId: string): Promise<num
 export async function depositToCampaign(campaignId: string, amount: number): Promise<{ signature: string }> {
   const keys = await getCampaignWalletKeys(campaignId);
   return deposit(keys, amount);
+}
+
+export async function withdrawFromCampaign(campaignId: string, amount: number, recipient: string): Promise<{ signature: string; amount: number }> {
+  const keys = await getCampaignWalletKeys(campaignId);
+  return withdraw(keys, amount, recipient);
 }
 
 export async function deleteCampaignWallet(campaignId: string): Promise<void> {

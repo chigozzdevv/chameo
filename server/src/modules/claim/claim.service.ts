@@ -20,6 +20,7 @@ export async function processClaim(campaignId: string, token: string, walletAddr
   const campaign = await getCampaignDoc(campaignId);
 
   if (!campaign) throw new BadRequestError("Campaign not found");
+  if (campaign.status === "closed") throw new BadRequestError("Campaign closed");
   if (!campaign.funded) throw new BadRequestError("Campaign not funded");
   if (campaign.expiresAt < Date.now() / 1000) throw new BadRequestError("Campaign expired");
   if (campaign.claimCount >= campaign.maxClaims) throw new BadRequestError("All claims exhausted");
