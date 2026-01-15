@@ -73,6 +73,7 @@ export async function withdraw(keys: WalletKeys, requestedAmount: number, recipi
   const cfg = await fetchRelayerConfig();
   validateFeeConfig(cfg);
 
+  // Calculate fees: percentage + rent
   let fee = Math.floor(requestedAmount * cfg.withdraw_fee_rate + LAMPORTS_PER_SOL * cfg.withdraw_rent_fee);
   let amount = Math.floor(requestedAmount - fee);
   const total = utxos.reduce((s, u) => s + u.amount.toNumber(), 0);
@@ -87,6 +88,7 @@ export async function withdraw(keys: WalletKeys, requestedAmount: number, recipi
   const { root, nextIndex } = await fetchTreeState();
   const recipientPk = new PublicKey(recipient);
 
+  // Use largest UTXO as input, create dummy if only one UTXO
   const input1 = utxos[0];
   const input2 = utxos[1] || createUtxo(wasm, utxoKeypair);
   const inputs = [input1, input2];

@@ -67,6 +67,7 @@ export async function checkFunding(id: string): Promise<{ balance: number; total
   const totalRequired = doc.payoutAmount * doc.maxClaims;
   let pcBalance = await getCampaignPrivateBalance(id);
 
+  // Auto-deposit if funds are on-chain but not in Privacy Cash
   if (pcBalance < totalRequired) {
     const publicKey = await getCampaignWalletPublicKey(id);
     const onChainBalance = await connection.getBalance(new PublicKey(publicKey));

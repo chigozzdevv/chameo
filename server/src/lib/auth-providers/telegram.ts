@@ -18,6 +18,7 @@ export const telegramProvider: AuthProvider = {
         return { valid: false, error: "Missing Telegram auth data" };
       }
 
+      // Verify Telegram auth hash using bot token
       const { hash, ...data } = authData;
       const dataCheckString = Object.keys(data)
         .sort()
@@ -31,6 +32,7 @@ export const telegramProvider: AuthProvider = {
         return { valid: false, error: "Invalid Telegram auth hash" };
       }
 
+      // Reject auth data older than 24 hours
       const authDate = parseInt(authData.auth_date, 10);
       if (Date.now() / 1000 - authDate > 86400) {
         return { valid: false, error: "Telegram auth expired" };

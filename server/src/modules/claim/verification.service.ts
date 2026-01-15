@@ -54,6 +54,7 @@ export async function verifyOtp(
   if (!doc) return { valid: false, error: "No verification code found" };
   if (doc.attempts >= MAX_OTP_ATTEMPTS) return { valid: false, error: "Too many attempts" };
 
+  // Increment attempts before validation to prevent timing attacks
   await col.updateOne({ key }, { $inc: { attempts: 1 } });
 
   if (doc.code !== code) return { valid: false, error: "Invalid code" };

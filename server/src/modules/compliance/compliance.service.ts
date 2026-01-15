@@ -39,6 +39,7 @@ export async function checkWalletCompliance(address: string): Promise<Compliance
     };
   }
 
+  // Range uses 1-10 scale, 6+ is high risk
   if (riskResult.riskScore >= RISK_THRESHOLD) {
     return {
       isCompliant: false,
