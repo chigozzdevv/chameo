@@ -9,7 +9,10 @@ export async function signup(email: string, password: string, orgName: string): 
   const existing = await col.findOne({ email: email.toLowerCase() });
   if (existing) throw new ConflictError("Email already registered");
 
-  const orgSlug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const orgSlug = orgName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
   const slugExists = await col.findOne({ orgSlug });
   if (slugExists) throw new ConflictError("Organization name already taken");
 

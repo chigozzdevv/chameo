@@ -19,12 +19,13 @@ export async function processClaim(campaignId: string, token: string, walletAddr
 
   const identityHash = tokenResult.identityHash!;
 
+  // Idempotency: return existing claim if already processed
   const existingClaim = await claimsCollection().findOne({ campaignId, identityHash });
   if (existingClaim && existingClaim.signature) {
     return {
       signature: existingClaim.signature,
       amount: existingClaim.amount,
-      compliance: existingClaim.compliance
+      compliance: existingClaim.compliance,
     };
   }
 
@@ -42,6 +43,7 @@ export async function processClaim(campaignId: string, token: string, walletAddr
     if (!campaign.selectedWinners?.includes(identityHash)) throw new BadRequestError("Not selected as winner");
   }
 
+  // Atomic claim reservation to prevent double claims
   const insertResult = await claimsCollection().updateOne(
     { campaignId, identityHash },
     {
@@ -79,10 +81,7 @@ export async function processClaim(campaignId: string, token: string, walletAddr
     const keys = await getCampaignWalletKeys(campaignId);
     const result = await withdraw(keys, campaign.payoutAmount, walletAddress);
 
-    await claimsCollection().updateOne(
-      { campaignId, identityHash },
-      { $set: { signature: result.signature, compliance } }
-    );
+    await claimsCollection().updateOne({ campaignId, identityHash }, { $set: { signature: result.signature, compliance } });
 
     await incrementClaimCount(campaignId);
     await deductFunds(campaignId, campaign.payoutAmount);
@@ -92,16 +91,14 @@ export async function processClaim(campaignId: string, token: string, walletAddr
 
     return { signature: result.signature, amount: campaign.payoutAmount, compliance };
   } catch (error) {
+    // Cleanup failed claim to allow retry
     await claimsCollection().deleteOne({ campaignId, identityHash, signature: "" });
     await trackEvent({ campaignId, eventType: "claim-failure", identityHash, metadata: { error: String(error) } });
     throw error;
   }
 }
 
-export async function getClaimStatus(
-  campaignId: string,
-  identityHash: string
-): Promise<{ claimed: boolean; claim?: any }> {
+export async function getClaimStatus(campaignId: string, identityHash: string): Promise<{ claimed: boolean; claim?: any }> {
   const claim = await claimsCollection().findOne({ campaignId, identityHash });
   return { claimed: !!claim && !!claim.signature, claim: claim || undefined };
 }

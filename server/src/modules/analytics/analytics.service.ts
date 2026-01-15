@@ -3,7 +3,7 @@ import { analyticsEventsCollection, campaignAnalyticsCollection, type AnalyticsE
 export async function trackEvent(event: Omit<AnalyticsEvent, "timestamp">): Promise<void> {
   await analyticsEventsCollection().insertOne({
     ...event,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   });
 
   const updateFields: Record<string, number> = {};
@@ -29,7 +29,7 @@ export async function trackEvent(event: Omit<AnalyticsEvent, "timestamp">): Prom
     { campaignId: event.campaignId },
     {
       $inc: updateFields,
-      $set: { lastUpdated: Date.now() }
+      $set: { lastUpdated: Date.now() },
     },
     { upsert: true }
   );
@@ -37,21 +37,19 @@ export async function trackEvent(event: Omit<AnalyticsEvent, "timestamp">): Prom
 
 export async function getCampaignAnalytics(campaignId: string) {
   const analytics = await campaignAnalyticsCollection().findOne({ campaignId });
-  return analytics || {
-    campaignId,
-    views: 0,
-    claimAttempts: 0,
-    claimSuccesses: 0,
-    claimFailures: 0,
-    votes: 0,
-    lastUpdated: Date.now()
-  };
+  return (
+    analytics || {
+      campaignId,
+      views: 0,
+      claimAttempts: 0,
+      claimSuccesses: 0,
+      claimFailures: 0,
+      votes: 0,
+      lastUpdated: Date.now(),
+    }
+  );
 }
 
 export async function getRecentEvents(campaignId: string, limit: number = 100) {
-  return analyticsEventsCollection()
-    .find({ campaignId })
-    .sort({ timestamp: -1 })
-    .limit(limit)
-    .toArray();
+  return analyticsEventsCollection().find({ campaignId }).sort({ timestamp: -1 }).limit(limit).toArray();
 }

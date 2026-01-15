@@ -31,7 +31,13 @@ export function createUtxoKeypair(privateKey: string, wasm: LightWasm): UtxoKeyp
   return { privkey, pubkey };
 }
 
-export function createUtxo(wasm: LightWasm, keypair: UtxoKeypair, amount: BN = new BN(0), index: number = 0, mintAddress: string = SOL_MINT): Utxo {
+export function createUtxo(
+  wasm: LightWasm,
+  keypair: UtxoKeypair,
+  amount: BN = new BN(0),
+  index: number = 0,
+  mintAddress: string = SOL_MINT
+): Utxo {
   return { amount, blinding: new BN(crypto.randomInt(1e9)), index, mintAddress, keypair };
 }
 
@@ -79,6 +85,7 @@ export function decryptUtxo(data: Buffer, encryptionKey: Buffer, keypair: UtxoKe
       return { amount: new BN(amount), blinding: new BN(blinding), index: parseInt(index), mintAddress, keypair };
     }
 
+    // Fallback to V1 encryption for backward compatibility
     if (!v1Key) return null;
 
     const iv = data.subarray(0, 16);

@@ -11,9 +11,7 @@ export async function fetchTreeState(tokenName?: string): Promise<TreeState> {
 }
 
 export async function fetchMerkleProof(commitment: string, tokenName?: string): Promise<MerkleProof> {
-  const url = tokenName
-    ? `${RELAYER_URL}/merkle/proof/${commitment}?token=${tokenName}`
-    : `${RELAYER_URL}/merkle/proof/${commitment}`;
+  const url = tokenName ? `${RELAYER_URL}/merkle/proof/${commitment}?token=${tokenName}` : `${RELAYER_URL}/merkle/proof/${commitment}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch merkle proof: ${res.status}`);
   return res.json();
@@ -25,7 +23,10 @@ export async function fetchRelayerConfig(): Promise<RelayerConfig> {
   return res.json();
 }
 
-export async function fetchEncryptedUtxos(start: number, end: number): Promise<{ encrypted_outputs: string[]; hasMore: boolean; total: number }> {
+export async function fetchEncryptedUtxos(
+  start: number,
+  end: number
+): Promise<{ encrypted_outputs: string[]; hasMore: boolean; total: number }> {
   const res = await fetch(`${RELAYER_URL}/utxos/range?start=${start}&end=${end}`);
   if (!res.ok) throw new Error(`Failed to fetch utxos: ${res.status}`);
   return res.json();

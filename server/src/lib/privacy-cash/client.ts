@@ -92,10 +92,7 @@ export async function withdraw(keys: WalletKeys, requestedAmount: number, recipi
   const inputs = [input1, input2];
 
   const change = input1.amount.add(input2.amount).sub(new BN(amount)).sub(new BN(fee));
-  const outputs = [
-    createUtxo(wasm, utxoKeypair, change, nextIndex),
-    createUtxo(wasm, utxoKeypair, new BN(0), nextIndex + 1),
-  ];
+  const outputs = [createUtxo(wasm, utxoKeypair, change, nextIndex), createUtxo(wasm, utxoKeypair, new BN(0), nextIndex + 1)];
 
   const proofs = await fetchInputProofs(inputs, wasm);
   const nullifiers = inputs.map((u) => getNullifier(u, wasm));
@@ -160,10 +157,7 @@ export async function deposit(keys: WalletKeys, amount: number): Promise<Deposit
 
   const existingTotal = input1.amount.add(input2.amount);
   const outputAmount = existingTotal.add(new BN(amount));
-  const outputs = [
-    createUtxo(wasm, utxoKeypair, outputAmount, nextIndex),
-    createUtxo(wasm, utxoKeypair, new BN(0), nextIndex + 1),
-  ];
+  const outputs = [createUtxo(wasm, utxoKeypair, outputAmount, nextIndex), createUtxo(wasm, utxoKeypair, new BN(0), nextIndex + 1)];
 
   const proofs = await fetchInputProofs(inputs, wasm);
   const nullifiers = inputs.map((u) => getNullifier(u, wasm));
@@ -233,10 +227,12 @@ async function fetchUnspentUtxos(
   const decryptedUtxos: { utxo: Utxo; encryptedOutput: string }[] = [];
   let offset = 0;
 
+  // Fetch all encrypted UTXOs from relayer
   while (true) {
     const data = await fetchEncryptedUtxos(offset, offset + FETCH_BATCH_SIZE);
 
     for (const enc of data.encrypted_outputs || []) {
+      // Try V2 decryption first, fallback to V1 if available
       let utxo = decryptUtxo(Buffer.from(enc, "hex"), encryptionKey, keypair, encryptionKeyV1);
       if (!utxo && encryptionKeyV1 && keypairV1) {
         utxo = decryptUtxo(Buffer.from(enc, "hex"), encryptionKeyV1, keypairV1);
@@ -252,6 +248,7 @@ async function fetchUnspentUtxos(
 
   if (decryptedUtxos.length === 0) return [];
 
+  // Sync UTXO indices from relayer
   const indices = await fetchUtxoIndices(decryptedUtxos.map((d) => d.encryptedOutput));
   for (let i = 0; i < decryptedUtxos.length; i++) {
     if (typeof indices[i] === "number") {
@@ -259,6 +256,7 @@ async function fetchUnspentUtxos(
     }
   }
 
+  // Filter out spent UTXOs by checking nullifier PDAs
   const unspent: Utxo[] = [];
   const pdaChecks: PublicKey[] = [];
 

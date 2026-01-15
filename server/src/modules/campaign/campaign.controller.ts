@@ -10,7 +10,8 @@ const router = Router();
 
 router.post("/", authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, description, type, authMethod, payoutAmount, maxClaims, expiresAt, winnersDeadline, recipients, requireCompliance } = req.body;
+    const { name, description, type, authMethod, payoutAmount, maxClaims, expiresAt, winnersDeadline, recipients, requireCompliance } =
+      req.body;
 
     if (!name || name.length < 2) throw new BadRequestError("Campaign name required");
     if (!["payout", "escrow"].includes(type)) throw new BadRequestError("Invalid type");
@@ -61,9 +62,9 @@ router.get("/:id", async (req: Request<{ id: string }>, res: Response, next: Nex
   try {
     const campaign = await campaignService.getCampaign(req.params.id);
     if (!campaign) throw new NotFoundError("Campaign not found");
-    
+
     await trackEvent({ campaignId: req.params.id, eventType: "view" });
-    
+
     res.json({ success: true, campaign });
   } catch (error) {
     next(error);

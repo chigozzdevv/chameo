@@ -30,10 +30,7 @@ export async function sendBatchNotifications(
         <p>Or copy this link: ${link}</p>
       `;
 
-      const success =
-        authMethod === "email"
-          ? await sendEmail(recipient, subject, html)
-          : await sendSms(recipient, `${subject}: ${link}`);
+      const success = authMethod === "email" ? await sendEmail(recipient, subject, html) : await sendSms(recipient, `${subject}: ${link}`);
 
       if (success) sent++;
       else failed++;

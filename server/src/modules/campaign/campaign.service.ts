@@ -2,7 +2,13 @@ import { PublicKey } from "@solana/web3.js";
 import { connection } from "@/config";
 import { generateId, hashIdentity, NotFoundError, ForbiddenError, BadRequestError } from "@/shared";
 import { campaignsCollection, type CampaignDoc, type CreateCampaignInput, type CampaignPublic } from "./campaign.model";
-import { createCampaignWallet, getCampaignPrivateBalance, getCampaignWalletPublicKey, depositToCampaign, withdrawFromCampaign } from "./wallet.service";
+import {
+  createCampaignWallet,
+  getCampaignPrivateBalance,
+  getCampaignWalletPublicKey,
+  depositToCampaign,
+  withdrawFromCampaign,
+} from "./wallet.service";
 
 export async function createCampaign(
   userId: string,
@@ -115,7 +121,11 @@ export async function addRecipients(id: string, userId: string, recipients: stri
   return { added: uniqueNew.length };
 }
 
-export async function closeCampaign(id: string, userId: string, reclaimAddress: string): Promise<{ reclaimedAmount: number; signature?: string }> {
+export async function closeCampaign(
+  id: string,
+  userId: string,
+  reclaimAddress: string
+): Promise<{ reclaimedAmount: number; signature?: string }> {
   const col = campaignsCollection();
   const doc = await col.findOne({ id });
 
@@ -148,14 +158,11 @@ export async function selectWinners(id: string, userId: string, winners: string[
     throw new BadRequestError("Winners deadline passed");
   }
 
-  const winnerHashes = winners.map(w => hashIdentity(doc.authMethod, w).toString("hex"));
-  const invalidWinners = winnerHashes.filter(h => !doc.eligibleHashes.includes(h));
+  const winnerHashes = winners.map((w) => hashIdentity(doc.authMethod, w).toString("hex"));
+  const invalidWinners = winnerHashes.filter((h) => !doc.eligibleHashes.includes(h));
   if (invalidWinners.length > 0) throw new BadRequestError("Some winners not eligible");
 
-  await col.updateOne(
-    { id },
-    { $set: { selectedWinners: winnerHashes, status: "winners-announced" } }
-  );
+  await col.updateOne({ id }, { $set: { selectedWinners: winnerHashes, status: "winners-announced" } });
 
   return { winnersCount: winnerHashes.length };
 }
@@ -204,11 +211,6 @@ function toPublic(doc: CampaignDoc): CampaignPublic {
     requireCompliance: doc.requireCompliance,
     participantCount: doc.eligibleHashes.length,
     winnersCount: doc.selectedWinners?.length,
-    status: doc.status,
-  };
-}
-    fundedAmount: doc.fundedAmount,
-    requireCompliance: doc.requireCompliance,
     status: doc.status,
   };
 }

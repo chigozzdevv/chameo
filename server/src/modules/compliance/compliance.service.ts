@@ -11,10 +11,7 @@ export async function checkWalletCompliance(address: string): Promise<Compliance
     };
   }
 
-  const [riskResult, sanctionsResult] = await Promise.all([
-    fetchRiskScore(address),
-    fetchSanctionsCheck(address),
-  ]);
+  const [riskResult, sanctionsResult] = await Promise.all([fetchRiskScore(address), fetchSanctionsCheck(address)]);
 
   const assessment: RiskAssessment = {
     address,

@@ -33,7 +33,11 @@ export async function depositToCampaign(campaignId: string, amount: number): Pro
   return deposit(keys, amount);
 }
 
-export async function withdrawFromCampaign(campaignId: string, amount: number, recipient: string): Promise<{ signature: string; amount: number }> {
+export async function withdrawFromCampaign(
+  campaignId: string,
+  amount: number,
+  recipient: string
+): Promise<{ signature: string; amount: number }> {
   const keys = await getCampaignWalletKeys(campaignId);
   return withdraw(keys, amount, recipient);
 }

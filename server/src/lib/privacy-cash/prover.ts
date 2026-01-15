@@ -18,6 +18,7 @@ export async function generateProof(input: Record<string, unknown>): Promise<Pro
       `${CIRCUIT_PATH}.zkey`
     );
 
+    // Convert proof elements to little-endian byte arrays for Solana
     const p = JSON.parse(JSON.stringify(proof));
     for (const k of ["pi_a", "pi_c"]) {
       for (const j in p[k]) {
