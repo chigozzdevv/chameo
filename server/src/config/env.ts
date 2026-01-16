@@ -7,11 +7,6 @@ export const env = {
     uri: process.env.MONGODB_URI || "mongodb://localhost:27017",
     dbName: process.env.MONGODB_DB_NAME || "chameo",
   },
-  vault: {
-    address: process.env.VAULT_ADDR || "http://localhost:8200",
-    token: process.env.VAULT_TOKEN || "dev-token",
-    mountPath: process.env.VAULT_MOUNT_PATH || "secret",
-  },
   solana: {
     rpcUrl: process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
   },
@@ -66,6 +61,9 @@ export const env = {
       botToken: process.env.TELEGRAM_BOT_TOKEN || "",
     },
   },
+  logging: {
+    level: process.env.LOG_LEVEL || "info",
+  },
   cors: {
     origin: process.env.CORS_ORIGIN || "*",
     credentials: process.env.CORS_CREDENTIALS === "true",
@@ -76,7 +74,6 @@ export function validateEnv(): void {
   if (env.nodeEnv === "production") {
     if (env.identity.salt === "chameo-dev-salt") throw new Error("IDENTITY_SALT required in production");
     if (env.jwt.secret === "chameo-dev-secret") throw new Error("JWT_SECRET required in production");
-    if (env.vault.token === "dev-token") throw new Error("VAULT_TOKEN required in production");
     if (!env.wallet.encryptionKey) throw new Error("WALLET_ENCRYPTION_KEY required in production");
   }
 }
