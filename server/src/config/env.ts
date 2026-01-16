@@ -28,6 +28,9 @@ export const env = {
   identity: {
     salt: process.env.IDENTITY_SALT || "chameo-dev-salt",
   },
+  wallet: {
+    encryptionKey: process.env.WALLET_ENCRYPTION_KEY || "",
+  },
   smtp: {
     host: process.env.SMTP_HOST || "",
     port: parseInt(process.env.SMTP_PORT || "587"),
@@ -74,5 +77,6 @@ export function validateEnv(): void {
     if (env.identity.salt === "chameo-dev-salt") throw new Error("IDENTITY_SALT required in production");
     if (env.jwt.secret === "chameo-dev-secret") throw new Error("JWT_SECRET required in production");
     if (env.vault.token === "dev-token") throw new Error("VAULT_TOKEN required in production");
+    if (!env.wallet.encryptionKey) throw new Error("WALLET_ENCRYPTION_KEY required in production");
   }
 }

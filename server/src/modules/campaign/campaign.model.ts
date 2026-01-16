@@ -25,6 +25,7 @@ export interface CampaignDoc {
   eligibleHashes: string[];
   selectedWinners?: string[];
   status: CampaignStatus;
+  encryptedWalletKeys?: string;
   createdAt: number;
 }
 
