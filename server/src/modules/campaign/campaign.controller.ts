@@ -133,7 +133,15 @@ router.post("/:id/notify", authMiddleware, async (req: Request<{ id: string }>, 
     if (!["email", "phone"].includes(doc.authMethod)) throw new BadRequestError("Notifications only for email/phone campaigns");
     if (!baseUrl) throw new BadRequestError("baseUrl required");
 
-    const result = await sendBatchNotifications(recipients, doc.authMethod, id, doc.name, baseUrl, useMagicLinks || false);
+    const result = await sendBatchNotifications(
+      recipients,
+      doc.authMethod,
+      id,
+      doc.name,
+      doc.payoutAmount,
+      baseUrl,
+      useMagicLinks || false
+    );
     res.json({ success: true, ...result });
   } catch (error) {
     next(error);

@@ -6,6 +6,7 @@ export async function sendBatchNotifications(
   authMethod: string,
   campaignId: string,
   campaignName: string,
+  payoutAmount: number,
   baseUrl: string,
   useMagicLinks: boolean
 ): Promise<{ sent: number; failed: number }> {
@@ -23,9 +24,11 @@ export async function sendBatchNotifications(
         link = `${baseUrl}/claim/${campaignId}`;
       }
 
-      const subject = `Claim your ${campaignName} payout`;
+      const amountInSol = (payoutAmount / 1e9).toFixed(4);
+      const subject = `Claim ${amountInSol} SOL from ${campaignName}`;
       const html = `
-        <p>You have a payout waiting from <strong>${campaignName}</strong>!</p>
+        <p>Hello,</p>
+        <p>You're eligible to claim <strong>${amountInSol} SOL</strong> from the <strong>${campaignName}</strong> campaign.</p>
         <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:6px;">Claim Now</a></p>
         <p>Or copy this link: ${link}</p>
       `;
