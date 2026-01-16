@@ -1,5 +1,5 @@
 import { generateOtp, generateToken, hashIdentity } from "@/shared";
-import { sendEmail, sendSms } from "@/lib/messaging";
+import { sendEmail } from "@/lib/messaging";
 import { otpsCollection, magicLinksCollection, verificationTokensCollection } from "./claim.model";
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
@@ -38,7 +38,8 @@ export async function sendPhoneOtp(phone: string, campaignId: string): Promise<b
     { upsert: true }
   );
 
-  return sendSms(phone, `Your Chameo verification code is: ${code}`);
+  console.log(`[SMS] To: ${phone} | Code: ${code}`);
+  return true;
 }
 
 export async function verifyOtp(

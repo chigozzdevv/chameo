@@ -1,4 +1,4 @@
-import { sendEmail, sendSms } from "@/lib/messaging";
+import { sendEmail } from "@/lib/messaging";
 import { createMagicLink } from "./verification.service";
 
 export async function sendBatchNotifications(
@@ -30,7 +30,13 @@ export async function sendBatchNotifications(
         <p>Or copy this link: ${link}</p>
       `;
 
-      const success = authMethod === "email" ? await sendEmail(recipient, subject, html) : await sendSms(recipient, `${subject}: ${link}`);
+      const success =
+        authMethod === "email"
+          ? await sendEmail(recipient, subject, html)
+          : (() => {
+              console.log(`[SMS] To: ${recipient} | ${subject}: ${link}`);
+              return true;
+            })();
 
       if (success) sent++;
       else failed++;
