@@ -1,7 +1,8 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { env } from "@/config";
-import { ConflictError, UnauthorizedError } from "@/shared";
+import { ConflictError, UnauthorizedError, NotFoundError } from "@/shared";
+import { sendEmail } from "@/lib/messaging";
 import { usersCollection, type AuthPayload } from "./auth.model";
 
 export async function signup(email: string, password: string, orgName: string): Promise<{ user: AuthPayload; token: string }> {
@@ -52,4 +53,43 @@ export function verifyToken(token: string): AuthPayload {
   } catch {
     throw new UnauthorizedError("Invalid token");
   }
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const col = usersCollection();
+  const user = await col.findOne({ email: email.toLowerCase() });
+  if (!user) throw new NotFoundError("Email not found");
+
+  const resetToken = jwt.sign({ userId: user._id!.toString(), email: user.email }, env.jwt.secret, { expiresIn: "1h" } as jwt.SignOptions);
+
+  await sendEmail(
+    user.email,
+    "Reset Your Password",
+    `<p>Click the link below to reset your password:</p><p><a href="${env.cors.origin}/reset-password?token=${resetToken}">Reset Password</a></p><p>This link expires in 1 hour.</p>`
+  );
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  let payload: AuthPayload;
+  try {
+    payload = jwt.verify(token, env.jwt.secret) as AuthPayload;
+  } catch {
+    throw new UnauthorizedError("Invalid or expired reset token");
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const col = usersCollection();
+  await col.updateOne({ email: payload.email }, { $set: { passwordHash } });
+}
+
+export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+  const col = usersCollection();
+  const user = await col.findOne({ _id: userId as any });
+  if (!user) throw new NotFoundError("User not found");
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) throw new UnauthorizedError("Current password is incorrect");
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await col.updateOne({ _id: userId as any }, { $set: { passwordHash } });
 }

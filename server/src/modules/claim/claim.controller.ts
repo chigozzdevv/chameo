@@ -1,57 +1,11 @@
 import { Router, Request } from "express";
-import { isValidEmail, isValidPhone, isValidPublicKey, hashIdentity, generateToken, BadRequestError, rateLimit } from "@/shared";
+import { isValidEmail, isValidPublicKey, hashIdentity, generateToken, BadRequestError, rateLimit } from "@/shared";
 import { authProviders } from "@/lib/auth-providers";
 import { verificationTokensCollection } from "./claim.model";
-import { sendEmailOtp, verifyOtp, verifyMagicLink } from "./verification.service";
+import { verifyMagicLink } from "./verification.service";
 import { processClaim, getClaimStatus } from "./claim.service";
 
 const router = Router();
-
-const otpRateLimit = rateLimit({
-  windowMs: 60 * 1000,
-  max: 3,
-  keyGenerator: (req: Request) => (req.body?.email || req.body?.phone || req.ip || "unknown") as string,
-});
-
-router.post("/verify/email", otpRateLimit, async (req, res, next) => {
-  try {
-    const { email, campaignId } = req.body;
-    if (!email || !isValidEmail(email)) throw new BadRequestError("Invalid email");
-    if (!campaignId) throw new BadRequestError("campaignId required");
-
-    const success = await sendEmailOtp(email, campaignId);
-    res.json({ success });
-  } catch (error) {
-    next(error);
-  }
-});
-
-router.post("/verify/otp", async (req, res, next) => {
-  try {
-    const { authMethod, identifier, campaignId, code } = req.body;
-    if (authMethod !== "email") throw new BadRequestError("Invalid authMethod");
-    if (!identifier) throw new BadRequestError("identifier required");
-    if (!campaignId) throw new BadRequestError("campaignId required");
-    if (!code || code.length !== 6) throw new BadRequestError("Invalid code");
-
-    const result = await verifyOtp(authMethod, identifier, campaignId, code);
-    if (!result.valid) throw new BadRequestError(result.error!);
-
-    const identityHash = hashIdentity(authMethod, identifier).toString("hex");
-    const token = generateToken();
-
-    await verificationTokensCollection().insertOne({
-      token,
-      identityHash,
-      campaignId,
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-    });
-
-    res.json({ success: true, token, identityHash });
-  } catch (error) {
-    next(error);
-  }
-});
 
 router.post("/verify/magic-link", async (req, res, next) => {
   try {
