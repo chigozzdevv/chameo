@@ -1,5 +1,4 @@
 import { env, validateEnv, connectDb, disconnectDb } from "@/config";
-import { vault } from "@/lib/vault";
 import { logger } from "@/shared";
 import { createUserIndexes } from "@/modules/auth";
 import { createCampaignIndexes } from "@/modules/campaign";
@@ -10,11 +9,6 @@ import { createApp } from "./app";
 
 async function main() {
   validateEnv();
-
-  const vaultHealthy = await vault.healthCheck();
-  if (!vaultHealthy) {
-    logger.warn("Vault is not available - wallet operations will fail");
-  }
 
   await connectDb();
   await createUserIndexes();

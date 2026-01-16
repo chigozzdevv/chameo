@@ -1,1 +1,0 @@
-export { vault } from "./client";

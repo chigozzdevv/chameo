@@ -4,10 +4,6 @@ export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-export function isValidPhone(phone: string): boolean {
-  return /^\+?[1-9]\d{6,14}$/.test(phone.replace(/\D/g, ""));
-}
-
 export function isValidPublicKey(address: string): boolean {
   try {
     new PublicKey(address);
@@ -17,6 +13,6 @@ export function isValidPublicKey(address: string): boolean {
   }
 }
 
-export function isValidAuthMethod(method: string): method is "email" | "phone" | "twitter" | "discord" | "github" | "telegram" {
-  return ["email", "phone", "twitter", "discord", "github", "telegram"].includes(method);
+export function isValidAuthMethod(method: string): method is "email" | "twitter" | "discord" | "github" | "telegram" {
+  return ["email", "twitter", "discord", "github", "telegram"].includes(method);
 }

@@ -1,14 +1,13 @@
-import { BadRequestError, NotFoundError } from "@/shared";
+import { BadRequestError, NotFoundError, hashIdentity } from "@/shared";
 import { votesCollection, type VoteAction } from "./voting.model";
 import { getCampaignDoc, campaignsCollection } from "@/modules/campaign";
-import { hashIdentity } from "@/modules/claim/verification.service";
 
 export async function castVote(campaignId: string, identity: string, action: VoteAction): Promise<void> {
   const campaign = await getCampaignDoc(campaignId);
   if (!campaign) throw new NotFoundError("Campaign not found");
   if (campaign.status !== "dispute") throw new BadRequestError("Campaign not in dispute");
 
-  const identityHash = hashIdentity(identity, campaign.authMethod);
+  const identityHash = hashIdentity(identity, campaign.authMethod).toString("hex");
   if (!campaign.eligibleHashes.includes(identityHash)) {
     throw new BadRequestError("Not eligible to vote");
   }
