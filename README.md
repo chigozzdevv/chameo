@@ -37,7 +37,7 @@ chameo/
 │       │   │   ├── prover.ts     # ZK proof generation
 │       │   │   └── relayer.ts    # Relayer API calls
 │       │   ├── auth-providers/   # OAuth handlers
-│       │   └── messaging/        # Email/SMS
+│       │   └── messaging/        # Email notifications
 │       ├── modules/              # Feature modules
 │       │   ├── auth/
 │       │   ├── campaign/
@@ -117,7 +117,6 @@ Key variables:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/claim/verify/email` | POST | Send email OTP |
-| `/api/claim/verify/phone` | POST | Send phone OTP |
 | `/api/claim/verify/otp` | POST | Verify OTP |
 | `/api/claim/verify/magic-link` | POST | Verify magic link |
 | `/api/claim/verify/social/:provider/url` | GET | Get OAuth URL |
