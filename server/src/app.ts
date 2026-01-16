@@ -5,7 +5,7 @@ import { env } from "@/config";
 import { errorHandler, logger } from "@/shared";
 import { authRoutes } from "@/modules/auth";
 import { campaignRoutes } from "@/modules/campaign";
-import claimRoutes from "@/modules/claim";
+import { claimRoutes } from "@/modules/claim";
 import { votingController } from "@/modules/voting";
 import { analyticsController } from "@/modules/analytics";
 

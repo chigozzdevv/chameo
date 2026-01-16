@@ -7,7 +7,6 @@ const router = Router();
 router.use("/", claimController);
 router.use("/", requestController);
 
-export default router;
-
+export { router as claimRoutes };
 export { createClaimIndexes } from "./claim.model";
 export { sendBatchNotifications } from "./notification.service";
