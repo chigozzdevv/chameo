@@ -1,22 +1,27 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import { env } from "@/config";
 
-const transporter = env.smtp.host
-  ? nodemailer.createTransport({
-      host: env.smtp.host,
-      port: env.smtp.port,
-      secure: env.smtp.port === 465,
-      auth: env.smtp.user ? { user: env.smtp.user, pass: env.smtp.pass } : undefined,
-    })
-  : null;
+const resend = new Resend(env.resend.apiKey);
 
 export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
-  if (!transporter) {
-    console.log(`[DEV EMAIL] To: ${to} | Subject: ${subject}`);
+  if (!env.resend.apiKey) {
+    console.log(`[EMAIL] To: ${to} | Subject: ${subject}`);
     return true;
   }
+
   try {
-    await transporter.sendMail({ from: env.smtp.from, to, subject, html });
+    const { error } = await resend.emails.send({
+      from: env.resend.from,
+      to: [to],
+      subject,
+      html,
+    });
+
+    if (error) {
+      console.error("Email send failed:", error);
+      return false;
+    }
+
     return true;
   } catch (error) {
     console.error("Email send failed:", error);
