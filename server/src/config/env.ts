@@ -33,11 +33,6 @@ export const env = {
     pass: process.env.SMTP_PASS || "",
     from: process.env.SMTP_FROM || "noreply@chameo.cash",
   },
-  twilio: {
-    accountSid: process.env.TWILIO_ACCOUNT_SID || "",
-    authToken: process.env.TWILIO_AUTH_TOKEN || "",
-    phoneNumber: process.env.TWILIO_PHONE_NUMBER || "",
-  },
   range: {
     apiKey: process.env.RANGE_API_KEY || "",
   },
