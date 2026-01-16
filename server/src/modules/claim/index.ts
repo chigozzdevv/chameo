@@ -8,5 +8,7 @@ router.use("/", claimController);
 router.use("/", requestController);
 
 export { router as claimRoutes };
-export { createClaimIndexes } from "./claim.model";
-export { sendBatchNotifications } from "./notification.service";
+export * from "./claim.model";
+export * from "./claim.service";
+export * from "./notification.service";
+export * from "./verification.service";

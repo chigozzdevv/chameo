@@ -1,2 +1,2 @@
-export type { RiskAssessment, ComplianceCheckResult } from "./compliance.model";
-export { checkWalletCompliance } from "./compliance.service";
+export * from "./compliance.model";
+export * from "./compliance.service";
