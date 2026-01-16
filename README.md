@@ -30,7 +30,6 @@ chameo/
 │       │   ├── db.ts
 │       │   └── solana.ts
 │       ├── lib/                  # Shared libraries
-│       │   ├── vault/            # HashiCorp Vault client
 │       │   ├── privacy-cash/     # Privacy Cash protocol
 │       │   │   ├── client.ts     # High-level API
 │       │   │   ├── crypto.ts     # UTXO encryption
@@ -50,7 +49,6 @@ chameo/
 │           ├── validation.ts
 │           └── middleware/
 │   └── circuit/                  # ZK circuit files
-├── docker-compose.yml            # Vault + MongoDB
 └── README.md
 ```
 
@@ -59,20 +57,19 @@ chameo/
 ### Prerequisites
 
 - Node.js 18+
-- Docker (for Vault and MongoDB)
+- MongoDB (Atlas recommended)
 
 ### Installation
 
 ```bash
-# Start Vault and MongoDB
-docker-compose up -d
-
 # Install dependencies
 cd server
 npm install
 
 # Copy environment file
 cp .env.example .env
+
+# Configure environment variables (see below)
 
 # Run development server
 npm run dev
@@ -83,11 +80,13 @@ npm run dev
 See `server/.env.example` for all configuration options.
 
 Key variables:
-- `VAULT_ADDR` - HashiCorp Vault address
-- `VAULT_TOKEN` - Vault authentication token
-- `MONGODB_URI` - MongoDB connection string
+- `MONGODB_URI` - MongoDB connection string (Atlas or local)
 - `SOLANA_RPC_URL` - Solana RPC endpoint
 - `JWT_SECRET` - JWT signing secret (required in production)
+- `IDENTITY_SALT` - Identity hashing salt (required in production)
+- `WALLET_ENCRYPTION_KEY` - Wallet encryption key (required in production)
+- `RESEND_API_KEY` - Resend API key for emails
+- `RESEND_FROM` - Email sender address
 - `IDENTITY_SALT` - Identity hashing salt (required in production)
 
 ## API Endpoints
@@ -116,8 +115,6 @@ Key variables:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/claim/verify/email` | POST | Send email OTP |
-| `/api/claim/verify/otp` | POST | Verify OTP |
 | `/api/claim/verify/magic-link` | POST | Verify magic link |
 | `/api/claim/verify/social/:provider/url` | GET | Get OAuth URL |
 | `/api/claim/verify/social/:provider/callback` | POST | OAuth callback |
@@ -128,11 +125,10 @@ Key variables:
 
 ### Wallet Key Storage
 
-Campaign wallet private keys are stored in HashiCorp Vault, not in the database. This provides:
+Campaign wallet private keys are encrypted with AES-256-CBC and stored in MongoDB. The encryption key is stored in the `WALLET_ENCRYPTION_KEY` environment variable. This provides:
 - Encryption at rest
-- Access control via Vault policies
-- Audit logging
-- Key rotation support
+- Simple deployment (no external services)
+- Secure key management via environment variables
 
 ### Identity Protection
 
@@ -159,31 +155,6 @@ npm run build
 
 # Start production server
 npm start
-```
-
-## Vault Setup (Production)
-
-For production, use a properly configured Vault instance:
-
-```bash
-# Initialize Vault
-vault operator init
-
-# Unseal Vault
-vault operator unseal
-
-# Enable KV secrets engine
-vault secrets enable -path=secret kv-v2
-
-# Create policy for chameo
-vault policy write chameo - <<EOF
-path "secret/data/campaign-wallets/*" {
-  capabilities = ["create", "read", "update", "delete"]
-}
-EOF
-
-# Create token with policy
-vault token create -policy=chameo
 ```
 
 ## License
