@@ -1,7 +1,7 @@
 import { Collection } from "mongodb";
 import { getDb } from "@/config";
 
-export type AuthMethod = "email" | "phone" | "twitter" | "discord" | "github" | "telegram";
+export type AuthMethod = "email" | "twitter" | "discord" | "github" | "telegram";
 export type CampaignType = "payout" | "escrow";
 export type CampaignStatus = "active" | "winners-announced" | "dispute" | "closed";
 

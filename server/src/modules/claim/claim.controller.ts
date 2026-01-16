@@ -2,7 +2,7 @@ import { Router, Request } from "express";
 import { isValidEmail, isValidPhone, isValidPublicKey, hashIdentity, generateToken, BadRequestError, rateLimit } from "@/shared";
 import { authProviders } from "@/lib/auth-providers";
 import { verificationTokensCollection } from "./claim.model";
-import { sendEmailOtp, sendPhoneOtp, verifyOtp, verifyMagicLink } from "./verification.service";
+import { sendEmailOtp, verifyOtp, verifyMagicLink } from "./verification.service";
 import { processClaim, getClaimStatus } from "./claim.service";
 
 const router = Router();
@@ -26,23 +26,10 @@ router.post("/verify/email", otpRateLimit, async (req, res, next) => {
   }
 });
 
-router.post("/verify/phone", otpRateLimit, async (req, res, next) => {
-  try {
-    const { phone, campaignId } = req.body;
-    if (!phone || !isValidPhone(phone)) throw new BadRequestError("Invalid phone");
-    if (!campaignId) throw new BadRequestError("campaignId required");
-
-    const success = await sendPhoneOtp(phone, campaignId);
-    res.json({ success });
-  } catch (error) {
-    next(error);
-  }
-});
-
 router.post("/verify/otp", async (req, res, next) => {
   try {
     const { authMethod, identifier, campaignId, code } = req.body;
-    if (!["email", "phone"].includes(authMethod)) throw new BadRequestError("Invalid authMethod");
+    if (authMethod !== "email") throw new BadRequestError("Invalid authMethod");
     if (!identifier) throw new BadRequestError("identifier required");
     if (!campaignId) throw new BadRequestError("campaignId required");
     if (!code || code.length !== 6) throw new BadRequestError("Invalid code");

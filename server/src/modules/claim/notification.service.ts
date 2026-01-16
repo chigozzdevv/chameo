@@ -30,13 +30,7 @@ export async function sendBatchNotifications(
         <p>Or copy this link: ${link}</p>
       `;
 
-      const success =
-        authMethod === "email"
-          ? await sendEmail(recipient, subject, html)
-          : (() => {
-              console.log(`[SMS] To: ${recipient} | ${subject}: ${link}`);
-              return true;
-            })();
+      const success = authMethod === "email" ? await sendEmail(recipient, subject, html) : false;
 
       if (success) sent++;
       else failed++;

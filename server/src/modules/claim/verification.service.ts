@@ -28,20 +28,6 @@ export async function sendEmailOtp(email: string, campaignId: string): Promise<b
   );
 }
 
-export async function sendPhoneOtp(phone: string, campaignId: string): Promise<boolean> {
-  const code = generateOtp();
-  const key = otpKey("phone", phone, campaignId);
-
-  await otpsCollection().updateOne(
-    { key },
-    { $set: { key, code, attempts: 0, expiresAt: new Date(Date.now() + OTP_EXPIRY_MS) } },
-    { upsert: true }
-  );
-
-  console.log(`[SMS] To: ${phone} | Code: ${code}`);
-  return true;
-}
-
 export async function verifyOtp(
   method: string,
   identifier: string,
