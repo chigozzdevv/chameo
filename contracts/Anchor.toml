@@ -1,19 +1,21 @@
+[toolchain]
+
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.devnet]
-chameo_privacy = "ChameoPrivacyProgramID11111111111111111111"
+chameo_privacy = "GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU"
 
 [programs.mainnet]
-chameo_privacy = "ChameoPrivacyProgramID11111111111111111111"
+chameo_privacy = "8YMAfR6c26sKt9wtbXKzDdSWop1sqTadTz72RFbYCDdn"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Devnet"
-wallet = "~/.config/solana/id.json"
+cluster = "devnet"
+wallet = "/home/chigozzdev/Desktop/chameo/server/server-keypair.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

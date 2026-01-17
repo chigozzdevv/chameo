@@ -7,3 +7,23 @@ coverage/
 .nyc_output/
 *.tsbuildinfo
 cache/
+
+# Keypairs
+*-keypair.json
+*.json.bak
+
+# Anchor / Rust build
+contracts/target/
+contracts/target/**
+contracts/.anchor/
+contracts/.cargo/
+
+# Keep IDL + types
+!contracts/target/idl/
+!contracts/target/idl/**
+!contracts/target/types/
+!contracts/target/types/**
+
+# Noir artifacts
+zk/noir/vote_eligibility/target/
+zk/noir/vote_eligibility/Prover.toml

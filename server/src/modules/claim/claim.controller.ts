@@ -2,7 +2,7 @@ import { Router, Request } from "express";
 import { isValidEmail, isValidPublicKey, hashIdentity, generateToken, BadRequestError, rateLimit } from "@/shared";
 import { authProviders } from "@/lib/auth-providers";
 import { verificationTokensCollection } from "./claim.model";
-import { verifyMagicLink } from "./verification.service";
+import { verifyMagicLink, validateVerificationToken } from "./verification.service";
 import { processClaim, getClaimStatus } from "./claim.service";
 
 const router = Router();
@@ -86,8 +86,19 @@ router.post("/process", async (req, res, next) => {
 router.get("/status/:campaignId/:identityHash", async (req, res, next) => {
   try {
     const { campaignId, identityHash } = req.params;
-    const result = await getClaimStatus(campaignId, identityHash);
-    res.json({ success: true, ...result });
+    const token = req.query.token;
+    if (!token || typeof token !== "string") throw new BadRequestError("token required");
+
+    const tokenResult = await validateVerificationToken(token, campaignId);
+    if (!tokenResult.valid || !tokenResult.identityHash) {
+      throw new BadRequestError(tokenResult.error || "Invalid or expired token");
+    }
+    if (tokenResult.identityHash !== identityHash) {
+      throw new BadRequestError("Invalid identityHash");
+    }
+
+    const result = await getClaimStatus(campaignId, tokenResult.identityHash);
+    res.json({ success: true, claimed: result.claimed });
   } catch (error) {
     next(error);
   }

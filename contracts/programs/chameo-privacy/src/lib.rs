@@ -1,34 +1,27 @@
+#![allow(unexpected_cfgs)]
+#![allow(clippy::result_large_err)]
+
 use anchor_lang::prelude::*;
 
-pub mod eligibility;
 pub mod voting;
-pub mod claims;
 pub mod analytics;
 
-pub use eligibility::*;
 pub use voting::*;
-pub use claims::*;
 pub use analytics::*;
 
-declare_id!("ChameoPrivacyProgramID11111111111111111111");
+declare_id!("GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU");
 
 #[program]
 pub mod chameo_privacy {
     use super::*;
 
-    pub fn register_eligibility<'info>(
-        ctx: Context<'_, '_, '_, 'info, RegisterEligibility<'info>>,
+    pub fn initialize_voting_pool<'info>(
+        ctx: Context<'_, '_, '_, 'info, InitializeVotingPool<'info>>,
         campaign_id: [u8; 32],
-        encrypted_proof: Vec<u8>,
+        eligibility_root: [u8; 32],
+        zk_verifier_program: Pubkey,
     ) -> Result<()> {
-        eligibility::register_eligibility(ctx, campaign_id, encrypted_proof)
-    }
-
-    pub fn verify_eligibility<'info>(
-        ctx: Context<'_, '_, '_, 'info, VerifyEligibility<'info>>,
-        campaign_id: [u8; 32],
-    ) -> Result<()> {
-        eligibility::verify_eligibility(ctx, campaign_id)
+        voting::initialize_voting_pool(ctx, campaign_id, eligibility_root, zk_verifier_program)
     }
 
     pub fn cast_vote<'info>(
@@ -39,42 +32,79 @@ pub mod chameo_privacy {
         voting::cast_vote(ctx, campaign_id, encrypted_vote)
     }
 
-    pub fn tally_votes<'info>(
-        ctx: Context<'_, '_, '_, 'info, TallyVotes<'info>>,
+    pub fn cast_vote_zk<'info>(
+        ctx: Context<'_, '_, '_, 'info, CastVoteZk<'info>>,
         campaign_id: [u8; 32],
+        nullifier_value: [u8; 32],
+        proof: Vec<u8>,
+        public_witness: Vec<u8>,
+        encrypted_vote: Vec<u8>,
     ) -> Result<()> {
-        voting::tally_votes(ctx, campaign_id)
+        voting::cast_vote_zk(ctx, campaign_id, nullifier_value, proof, public_witness, encrypted_vote)
     }
 
-    pub fn record_claim<'info>(
-        ctx: Context<'_, '_, '_, 'info, RecordClaim<'info>>,
+    pub fn close_voting<'info>(
+        ctx: Context<'_, '_, '_, 'info, CloseVoting<'info>>,
         campaign_id: [u8; 32],
-        encrypted_amount: Vec<u8>,
     ) -> Result<()> {
-        claims::record_claim(ctx, campaign_id, encrypted_amount)
+        voting::close_voting(ctx, campaign_id)
+    }
+
+    pub fn set_eligibility_root<'info>(
+        ctx: Context<'_, '_, '_, 'info, SetEligibilityRoot<'info>>,
+        campaign_id: [u8; 32],
+        eligibility_root: [u8; 32],
+    ) -> Result<()> {
+        voting::set_eligibility_root(ctx, campaign_id, eligibility_root)
+    }
+
+    pub fn initialize_analytics<'info>(
+        ctx: Context<'_, '_, '_, 'info, InitializeAnalytics<'info>>,
+        campaign_id: [u8; 32],
+    ) -> Result<()> {
+        analytics::initialize_analytics(ctx, campaign_id)
     }
 
     pub fn track_event<'info>(
         ctx: Context<'_, '_, '_, 'info, TrackEvent<'info>>,
         campaign_id: [u8; 32],
+        encrypted_increment: Vec<u8>,
         event_type: u8,
     ) -> Result<()> {
-        analytics::track_event(ctx, campaign_id, event_type)
+        analytics::track_event(ctx, campaign_id, encrypted_increment, event_type)
+    }
+
+    pub fn grant_analytics_access<'info>(
+        ctx: Context<'_, '_, '_, 'info, GrantAnalyticsAccess<'info>>,
+        campaign_id: [u8; 32],
+        allowed_address: Pubkey,
+    ) -> Result<()> {
+        analytics::grant_analytics_access(ctx, campaign_id, allowed_address)
     }
 }
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("Campaign not found")]
-    CampaignNotFound,
-    #[msg("Not eligible")]
-    NotEligible,
-    #[msg("Already voted")]
-    AlreadyVoted,
-    #[msg("Already claimed")]
-    AlreadyClaimed,
-    #[msg("Invalid vote option")]
-    InvalidVoteOption,
+    #[msg("Unauthorized")]
+    Unauthorized,
     #[msg("Voting not active")]
     VotingNotActive,
+    #[msg("Invalid event type")]
+    InvalidEventType,
+    #[msg("Invalid ZK verifier program")]
+    InvalidZkVerifier,
+    #[msg("Invalid ZK proof length")]
+    InvalidProofLength,
+    #[msg("Invalid ZK public witness length")]
+    InvalidPublicWitnessLength,
+    #[msg("Invalid ciphertext length")]
+    InvalidCiphertextLength,
+    #[msg("Merkle root mismatch")]
+    MerkleRootMismatch,
+    #[msg("Nullifier mismatch")]
+    NullifierMismatch,
+    #[msg("Commitment mismatch")]
+    CommitmentMismatch,
+    #[msg("Invalid poseidon input")]
+    InvalidPoseidonInput,
 }

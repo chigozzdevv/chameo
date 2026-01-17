@@ -23,8 +23,17 @@ export interface CampaignDoc {
   fundedAmount: number;
   requireCompliance: boolean;
   eligibleHashes: string[];
+  eligibilityRoot?: string;
   selectedWinners?: string[];
   status: CampaignStatus;
+  votingClosedAt?: number;
+  disputeOutcome?: "refund-host" | "equal-distribution" | "tie";
+  voteResults?: {
+    refundHost: number;
+    equalDistribution: number;
+    total: number;
+    resolvedAt: number;
+  };
   encryptedWalletKeys?: string;
   createdAt: number;
 }
@@ -61,6 +70,14 @@ export interface CampaignPublic {
   participantCount: number;
   winnersCount?: number;
   status: CampaignStatus;
+  votingClosedAt?: number;
+  disputeOutcome?: "refund-host" | "equal-distribution" | "tie";
+  voteResults?: {
+    refundHost: number;
+    equalDistribution: number;
+    total: number;
+    resolvedAt: number;
+  };
 }
 
 export function campaignsCollection(): Collection<CampaignDoc> {

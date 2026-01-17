@@ -9,6 +9,18 @@ export const env = {
   },
   solana: {
     rpcUrl: process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
+    devnetRpcUrl: process.env.SOLANA_DEVNET_RPC_URL || "https://api.devnet.solana.com",
+  },
+  inco: {
+    programId: process.env.INCO_PROGRAM_ID || "GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU",
+    serverPrivateKey: process.env.INCO_SERVER_PRIVATE_KEY || "",
+  },
+  zk: {
+    verifierProgramId: process.env.ZK_VERIFIER_PROGRAM_ID || "",
+    merkleDepth: parseInt(process.env.ZK_MERKLE_DEPTH || "16", 10),
+    ciphertextLength: parseInt(process.env.ZK_CIPHERTEXT_LENGTH || "114", 10),
+    proofLength: parseInt(process.env.ZK_PROOF_LENGTH || "388", 10),
+    publicWitnessLength: parseInt(process.env.ZK_PUBLIC_WITNESS_LENGTH || "108", 10),
   },
   privacyCash: {
     programId: process.env.PRIVACY_CASH_PROGRAM_ID || "9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD",
@@ -63,6 +75,7 @@ export const env = {
 };
 
 export function validateEnv(): void {
+  if (!env.range.apiKey) throw new Error("RANGE_API_KEY required");
   if (env.nodeEnv === "production") {
     if (env.identity.salt === "chameo-dev-salt") throw new Error("IDENTITY_SALT required in production");
     if (env.jwt.secret === "chameo-dev-secret") throw new Error("JWT_SECRET required in production");

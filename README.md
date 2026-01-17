@@ -1,161 +1,241 @@
 # chameo.cash
 
-Privacy-first payout infrastructure on Solana.
+chameo.cash is a privacy-first, compliance-gated payout platform for campaigns that need unlinkable funding, private claim flows, and encrypted dispute resolution on Solana. Teams can run direct payouts or escrowed bounties/grants where claimants collect funds without either side seeing the other's wallet, with escrow releases handled later.
 
-## Overview
+It routes payouts through Privacy Cash, encrypts votes and analytics with Inco Lightning, and uses Aztec Noir proofs plus a relayer to prove eligibility while breaking voter wallet linkage.
 
-chameo.cash enables organizations, DAOs, and platforms to distribute funds without revealing host or claimant wallet relationships. Built with Privacy Cash for unlinkable transfers.
+## Stack
+
+- Privacy Cash (unlinkable payments + relayer): `server/src/lib/privacy-cash/`
+- Inco Lightning (encrypted on-chain state): `contracts/programs/chameo-privacy/`, `server/src/lib/inco/`
+- Aztec Noir + Sunspot (ZK eligibility + nullifier + relayered vote): `zk/noir/vote_eligibility/`
+- Range (compliance screening): `server/src/modules/compliance/`
 
 ## Privacy Model
 
-| What | Visible On-Chain? |
-|------|-------------------|
-| Host wallet | ❌ No - funds via Privacy Cash |
-| Campaign wallet | ✅ Yes - receives from Privacy Cash |
-| Claimant wallet | ✅ Yes - receives from Privacy Cash |
-| Link: Host → Campaign | ❌ No - Privacy Cash breaks the link |
-| Link: Campaign → Claimant | ❌ No - Privacy Cash breaks the link |
-| Eligible identities | ❌ No - stored as hashes |
+<table>
+  <thead>
+    <tr>
+      <th>What</th>
+      <th>Visible On-Chain?</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Host wallet</td>
+      <td>No</td>
+      <td>Funds routed through Privacy Cash</td>
+    </tr>
+    <tr>
+      <td>Campaign wallet</td>
+      <td>Yes</td>
+      <td>Receives from Privacy Cash, then deposits into the private pool</td>
+    </tr>
+    <tr>
+      <td>Claimant wallet</td>
+      <td>Yes</td>
+      <td>Receives withdrawals from Privacy Cash</td>
+    </tr>
+    <tr>
+      <td>Link: Host -> Campaign</td>
+      <td>No</td>
+      <td>Privacy Cash breaks linkability</td>
+    </tr>
+    <tr>
+      <td>Link: Campaign -> Claimant</td>
+      <td>No</td>
+      <td>Privacy Cash breaks linkability</td>
+    </tr>
+    <tr>
+      <td>Eligible identities</td>
+      <td>No</td>
+      <td>Stored as salted SHA-256 hashes</td>
+    </tr>
+    <tr>
+      <td>Votes</td>
+      <td>No</td>
+      <td>Encrypted via Inco Lightning</td>
+    </tr>
+    <tr>
+      <td>Voter wallet in ZK vote</td>
+      <td>No</td>
+      <td>Relayer pays and signs</td>
+    </tr>
+  </tbody>
+</table>
+
+## Architecture
+
+- `server/` runs the API, Privacy Cash integration, ZK proof generation, and relayered voting.
+- `contracts/` is the Anchor program for encrypted voting + analytics.
+- `zk/` holds the Noir circuit and verifier artifacts.
+- `client/` contains the UI for campaign creation, voting, and claims.
 
 ## Project Structure
 
 ```
 chameo/
-├── server/
+├── client/                         # Frontend helpers
+├── contracts/                      # Anchor program (Inco)
+│   └── programs/
+│       └── chameo-privacy/
+│           ├── src/
+│           │   ├── voting.rs
+│           │   └── analytics.rs
+├── server/                         # API + Privacy Cash + ZK proof gen
 │   └── src/
-│       ├── index.ts              # Entry point
-│       ├── app.ts                # Express app setup
-│       ├── config/               # Configuration
-│       │   ├── env.ts
-│       │   ├── db.ts
-│       │   └── solana.ts
-│       ├── lib/                  # Shared libraries
-│       │   ├── privacy-cash/     # Privacy Cash protocol
-│       │   │   ├── client.ts     # High-level API
-│       │   │   ├── crypto.ts     # UTXO encryption
-│       │   │   ├── prover.ts     # ZK proof generation
-│       │   │   └── relayer.ts    # Relayer API calls
-│       │   ├── auth-providers/   # OAuth handlers
-│       │   └── messaging/        # Email notifications
-│       ├── modules/              # Feature modules
+│       ├── config/
+│       ├── lib/
+│       │   ├── inco/
+│       │   ├── privacy-cash/
+│       │   └── zk/
+│       ├── modules/
+│       │   ├── analytics/
 │       │   ├── auth/
 │       │   ├── campaign/
 │       │   ├── claim/
-│       │   └── compliance/
-│       └── shared/               # Shared utilities
-│           ├── errors.ts
-│           ├── logger.ts
-│           ├── crypto.ts
-│           ├── validation.ts
-│           └── middleware/
-│   └── circuit/                  # ZK circuit files
-└── README.md
+│       │   ├── compliance/
+│       │   └── voting/
+│       └── shared/
+└── zk/
+    └── noir/
+        └── vote_eligibility/
 ```
 
-## Quick Start
+## Flows
 
-### Prerequisites
+### Payout (Privacy Cash)
+1. Host deposits into Privacy Cash.
+2. Campaign wallet withdraws from Privacy Cash to receive funds.
+3. Campaign wallet deposits into Privacy Cash to create the private payout pool.
+4. Claims are screened by Range and withdraw from Privacy Cash to claimant wallets.
 
-- Node.js 18+
-- MongoDB (Atlas recommended)
+### Dispute Voting (Inco + Noir)
+1. Server builds a Poseidon Merkle root of eligible identities.
+2. Voter proves membership + nullifier + ciphertext commitment via Noir.
+3. `cast_vote_zk` verifies the proof on-chain and updates encrypted vote totals.
+4. Server decrypts totals with Inco attested decrypt for final outcome.
 
-### Installation
+### Analytics (Inco)
+1. Server writes encrypted analytics counters on-chain.
+2. Creator is granted decrypt access to read totals.
 
-```bash
-# Install dependencies
-cd server
-npm install
+## Key Files
 
-# Copy environment file
-cp .env.example .env
+- Privacy Cash: `server/src/lib/privacy-cash/`, `server/src/modules/campaign/wallet.service.ts`
+- Inco program: `contracts/programs/chameo-privacy/src/voting.rs`, `contracts/programs/chameo-privacy/src/analytics.rs`
+- Inco server client: `server/src/lib/inco/client.ts`
+- Range compliance: `server/src/modules/compliance/compliance.service.ts`, `server/src/modules/claim/claim.service.ts`
+- ZK circuit: `zk/noir/vote_eligibility/src/main.nr`
+- Merkle builder: `server/src/lib/zk/merkle.ts`
+- ZK vote test: `contracts/tests/chameo.test.ts`
 
-# Configure environment variables (see below)
+## Code Snippets
 
-# Run development server
-npm run dev
+Privacy Cash wallet usage (`server/src/modules/campaign/wallet.service.ts`):
+```ts
+export async function depositToCampaign(campaignId: string, amount: number): Promise<{ signature: string }> {
+  const keys = await getCampaignWalletKeys(campaignId);
+  return deposit(keys, amount);
+}
+
+export async function withdrawFromCampaign(
+  campaignId: string,
+  amount: number,
+  recipient: string
+): Promise<{ signature: string; amount: number }> {
+  const keys = await getCampaignWalletKeys(campaignId);
+  return withdraw(keys, amount, recipient);
+}
 ```
 
-### Environment Variables
+Range compliance gate (`server/src/modules/claim/claim.service.ts`):
+```ts
+const compliance = await checkWalletCompliance(walletAddress);
+if (!compliance.isCompliant) {
+  await claimsCollection().deleteOne({ campaignId, identityHash });
+  throw new BadRequestError(compliance.blockedReason || "Wallet failed compliance check");
+}
+```
 
-See `server/.env.example` for all configuration options.
+Inco ZK vote verification (`contracts/programs/chameo-privacy/src/voting.rs`):
+```rust
+require!(proof.len() == ZK_PROOF_LEN, ErrorCode::InvalidProofLength);
+require!(public_witness.len() == ZK_PUBLIC_WITNESS_LEN, ErrorCode::InvalidPublicWitnessLength);
 
-Key variables:
-- `MONGODB_URI` - MongoDB connection string (Atlas or local)
-- `SOLANA_RPC_URL` - Solana RPC endpoint
-- `JWT_SECRET` - JWT signing secret (required in production)
-- `IDENTITY_SALT` - Identity hashing salt (required in production)
-- `WALLET_ENCRYPTION_KEY` - Wallet encryption key (required in production)
-- `RESEND_API_KEY` - Resend API key for emails
-- `RESEND_FROM` - Email sender address
-- `IDENTITY_SALT` - Identity hashing salt (required in production)
+let commitment_bytes = poseidon_hash_bytes(&encrypted_vote)?;
+require!(commitment_bytes.as_ref() == witness_commitment, ErrorCode::CommitmentMismatch);
 
-## API Endpoints
+let verify_ix = Instruction {
+    program_id: ctx.accounts.zk_verifier_program.key(),
+    accounts: vec![],
+    data: verifier_data,
+};
+invoke(&verify_ix, &[])?;
+```
 
-### Auth
+Noir eligibility circuit (`zk/noir/vote_eligibility/src/main.nr`):
+```rust
+let leaf_fields = pack_bytes_16::<32, LEAF_FIELDS>(leaf);
+let mut current = poseidon::bn254::hash_2(leaf_fields);
+// Merkle path
+current = hash_pair(left, right);
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/signup` | POST | Create account |
-| `/api/auth/login` | POST | Login |
-| `/api/auth/me` | GET | Get current user |
+let secret_fields = pack_bytes_16::<SECRET_LEN, SECRET_FIELDS>(secret);
+let nullifier_field = poseidon::bn254::hash_2(secret_fields);
+assert(nullifier_field == nullifier);
+```
 
-### Campaigns
+Poseidon Merkle root builder (`server/src/lib/zk/merkle.ts`):
+```ts
+async function hashPair(left: Buffer, right: Buffer): Promise<Buffer> {
+  return poseidonHashFields([new BN(left), new BN(right)]);
+}
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/campaign` | POST | Create campaign |
-| `/api/campaign` | GET | List user campaigns |
-| `/api/campaign/:id` | GET | Get campaign info |
-| `/api/campaign/:id/funding-address` | GET | Get funding wallet address |
-| `/api/campaign/:id/check-funding` | POST | Check Privacy Cash balance |
-| `/api/campaign/:id/recipients` | POST | Add recipients |
-| `/api/campaign/:id/notify` | POST | Send claim notifications |
+export async function buildMerkleRoot(leafHexes: string[], depth: number): Promise<Buffer> {
+  const leaves = await Promise.all(leafHexes.map((leaf) => hashIdentityLeaf(normalizeIdentity(leaf, "leaf"))));
+  const layers = await buildLayers(leaves, depth);
+  return layers[layers.length - 1][0];
+}
+```
 
-### Claims
+ZK vote anonymity check (`contracts/tests/chameo.test.ts`):
+```ts
+const rawKeys = message.getAccountKeys
+  ? message.getAccountKeys().staticAccountKeys
+  : message.accountKeys;
+const accountKeys = rawKeys.map((key: PublicKey | string) => (typeof key === "string" ? key : key.toBase58()));
+assert.ok(!accountKeys.includes(voterA.publicKey.toBase58()));
+```
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/claim/verify/magic-link` | POST | Verify magic link |
-| `/api/claim/verify/social/:provider/url` | GET | Get OAuth URL |
-| `/api/claim/verify/social/:provider/callback` | POST | OAuth callback |
-| `/api/claim/process` | POST | Process claim |
-| `/api/claim/status/:campaignId/:identityHash` | GET | Check claim status |
+## Configuration
 
-## Security
+See `server/.env.example` for full list. Core keys:
 
-### Wallet Key Storage
-
-Campaign wallet private keys are encrypted with AES-256-CBC and stored in MongoDB. The encryption key is stored in the `WALLET_ENCRYPTION_KEY` environment variable. This provides:
-- Encryption at rest
-- Simple deployment (no external services)
-- Secure key management via environment variables
-
-### Identity Protection
-
-- User identities stored as SHA-256 hashes with salt
-- OTPs: 6 digits, 10 min expiry, max 5 attempts
-- Magic links: 24h expiry, single use
-- Verification tokens: 30 min expiry
-
-### Privacy Cash Integration
-
-- ZK proofs generated server-side using snarkjs
-- Borsh serialization for extDataHash (matches SDK exactly)
-- UTXO indices synced from relayer API
-- Transaction confirmation polling
+- `INCO_SERVER_PRIVATE_KEY`: relayer signer for Inco voting.
+- `RANGE_API_KEY`: required for compliance screening.
+- `ZK_VERIFIER_PROGRAM_ID`: deployed verifier program.
+- `ZK_MERKLE_DEPTH`, `ZK_CIPHERTEXT_LENGTH`, `ZK_PROOF_LENGTH`, `ZK_PUBLIC_WITNESS_LENGTH`.
+- `PRIVACY_CASH_PROGRAM_ID`, `PRIVACY_CASH_RELAYER_URL`, `PRIVACY_CASH_FEE_RECIPIENT`, `PRIVACY_CASH_ALT_ADDRESS`.
 
 ## Development
 
 ```bash
-# Run with hot reload
+cd server
+npm install
+cp .env.example .env
 npm run dev
-
-# Build for production
-npm run build
-
-# Start production server
-npm start
 ```
+
+## Tests
+
+```bash
+cd contracts
+npm test
+```
+
+The ZK vote test generates a Noir witness, creates a Sunspot proof, and calls `cast_vote_zk` against the deployed verifier program.
 
 ## License
 

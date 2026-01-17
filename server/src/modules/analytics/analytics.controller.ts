@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { authMiddleware } from "@/modules/auth";
-import { ForbiddenError, NotFoundError } from "@/shared";
+import { ForbiddenError, NotFoundError, BadRequestError, isValidPublicKey } from "@/shared";
 import { getCampaignDoc } from "@/modules/campaign";
 import * as analyticsService from "./analytics.service";
 
@@ -31,5 +31,25 @@ router.get("/:campaignId/events", authMiddleware, async (req: Request<{ campaign
     next(error);
   }
 });
+
+router.post(
+  "/:campaignId/grant-access",
+  authMiddleware,
+  async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
+    try {
+      const { creatorPubkey } = req.body;
+      if (!creatorPubkey || !isValidPublicKey(creatorPubkey)) throw new BadRequestError("Invalid creatorPubkey");
+
+      const campaign = await getCampaignDoc(req.params.campaignId);
+      if (!campaign) throw new NotFoundError("Campaign not found");
+      if (campaign.userId !== req.user!.userId) throw new ForbiddenError();
+
+      const result = await analyticsService.grantAnalyticsAccess(req.params.campaignId, creatorPubkey);
+      res.json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 export default router;

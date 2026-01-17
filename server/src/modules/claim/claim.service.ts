@@ -1,11 +1,11 @@
-import { env } from "@/config";
-import { withdraw, type WalletKeys } from "@/lib/privacy-cash";
+import { withdraw } from "@/lib/privacy-cash";
 import { BadRequestError, ConflictError } from "@/shared";
 import { trackEvent } from "@/modules/analytics";
 import { claimsCollection } from "./claim.model";
 import { getCampaignDoc, isEligible, incrementClaimCount, deductFunds, getCampaignWalletKeys } from "@/modules/campaign";
 import { checkWalletCompliance, type ComplianceCheckResult } from "@/modules/compliance";
 import { validateVerificationToken, consumeVerificationToken } from "./verification.service";
+import * as inco from "@/lib/inco";
 
 export interface ClaimResult {
   signature: string;
@@ -19,7 +19,6 @@ export async function processClaim(campaignId: string, token: string, walletAddr
 
   const identityHash = tokenResult.identityHash!;
 
-  // Idempotency: return existing claim if already processed
   const existingClaim = await claimsCollection().findOne({ campaignId, identityHash });
   if (existingClaim && existingClaim.signature) {
     return {
@@ -43,7 +42,6 @@ export async function processClaim(campaignId: string, token: string, walletAddr
     if (!campaign.selectedWinners?.includes(identityHash)) throw new BadRequestError("Not selected as winner");
   }
 
-  // Atomic claim reservation to prevent double claims
   const insertResult = await claimsCollection().updateOne(
     { campaignId, identityHash },
     {
@@ -67,13 +65,12 @@ export async function processClaim(campaignId: string, token: string, walletAddr
   let compliance: ComplianceCheckResult | null = null;
 
   try {
-    if (campaign.requireCompliance && env.range.apiKey) {
-      compliance = await checkWalletCompliance(walletAddress);
-      if (!compliance.isCompliant) {
-        await claimsCollection().deleteOne({ campaignId, identityHash });
-        await trackEvent({ campaignId, eventType: "claim-failure", identityHash, metadata: { reason: "compliance" } });
-        throw new BadRequestError(compliance.blockedReason || "Wallet failed compliance check");
-      }
+    // Compliance screening is mandatory for every claim.
+    compliance = await checkWalletCompliance(walletAddress);
+    if (!compliance.isCompliant) {
+      await claimsCollection().deleteOne({ campaignId, identityHash });
+      await trackEvent({ campaignId, eventType: "claim-failure", identityHash, metadata: { reason: "compliance" } });
+      throw new BadRequestError(compliance.blockedReason || "Wallet failed compliance check");
     }
 
     await trackEvent({ campaignId, eventType: "claim-attempt", identityHash });
@@ -91,14 +88,13 @@ export async function processClaim(campaignId: string, token: string, walletAddr
 
     return { signature: result.signature, amount: campaign.payoutAmount, compliance };
   } catch (error) {
-    // Cleanup failed claim to allow retry
     await claimsCollection().deleteOne({ campaignId, identityHash, signature: "" });
     await trackEvent({ campaignId, eventType: "claim-failure", identityHash, metadata: { error: String(error) } });
     throw error;
   }
 }
 
-export async function getClaimStatus(campaignId: string, identityHash: string): Promise<{ claimed: boolean; claim?: any }> {
+export async function getClaimStatus(campaignId: string, identityHash: string): Promise<{ claimed: boolean }> {
   const claim = await claimsCollection().findOne({ campaignId, identityHash });
-  return { claimed: !!claim && !!claim.signature, claim: claim || undefined };
+  return { claimed: !!claim && !!claim.signature };
 }

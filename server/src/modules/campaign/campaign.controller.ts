@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
+import { env } from "@/config";
 import { isValidAuthMethod, BadRequestError, ForbiddenError, NotFoundError } from "@/shared";
 import { authMiddleware } from "@/modules/auth";
 import { trackEvent } from "@/modules/analytics";
@@ -42,7 +43,6 @@ router.post("/", authMiddleware, async (req: Request, res: Response, next: NextF
       campaignId: result.campaign.id,
       fundingAddress: result.fundingAddress,
       totalRequired: payoutAmount * maxClaims,
-      identityHashes: result.identityHashes,
     });
   } catch (error) {
     next(error);
@@ -83,6 +83,29 @@ router.get("/:id/funding-address", authMiddleware, async (req: Request<{ id: str
       success: true,
       fundingAddress,
       totalRequired: doc.payoutAmount * doc.maxClaims,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/:id/funding-config", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const doc = await campaignService.getCampaignDoc(id);
+    if (!doc) throw new NotFoundError("Campaign not found");
+    if (doc.userId !== req.user!.userId) throw new ForbiddenError();
+
+    const campaignWallet = await getCampaignWalletPublicKey(id);
+    res.json({
+      success: true,
+      campaignWallet,
+      privacyCash: {
+        programId: env.privacyCash.programId,
+        relayerUrl: env.privacyCash.relayerUrl,
+        feeRecipient: env.privacyCash.feeRecipient,
+        altAddress: env.privacyCash.altAddress,
+      },
     });
   } catch (error) {
     next(error);

@@ -1,14 +1,12 @@
 import { env } from "@/config";
+import { InternalError } from "@/shared";
 import type { RiskAssessment, ComplianceCheckResult } from "./compliance.model";
 
 const RISK_THRESHOLD = 6; // Range uses 1-10 scale, 6+ is "High risk"
 
 export async function checkWalletCompliance(address: string): Promise<ComplianceCheckResult> {
   if (!env.range.apiKey) {
-    return {
-      isCompliant: true,
-      assessment: { address, riskScore: 1, riskLevel: "low", isSanctioned: false, isBlacklisted: false, flags: [], checkedAt: Date.now() },
-    };
+    throw new InternalError("RANGE_API_KEY not configured");
   }
 
   const [riskResult, sanctionsResult] = await Promise.all([fetchRiskScore(address), fetchSanctionsCheck(address)]);

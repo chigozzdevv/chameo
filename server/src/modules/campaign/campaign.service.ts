@@ -1,7 +1,9 @@
 import { PublicKey } from "@solana/web3.js";
-import { connection } from "@/config";
+import { connection, env } from "@/config";
 import { generateId, hashIdentity, NotFoundError, ForbiddenError, BadRequestError } from "@/shared";
 import { campaignsCollection, type CampaignDoc, type CreateCampaignInput, type CampaignPublic } from "./campaign.model";
+import { buildMerkleRoot } from "@/lib/zk";
+import * as inco from "@/lib/inco";
 import {
   createCampaignWallet,
   getCampaignPrivateBalance,
@@ -9,6 +11,7 @@ import {
   depositToCampaign,
   withdrawFromCampaign,
 } from "./wallet.service";
+import { initializeAnalyticsForCampaign } from "@/modules/analytics";
 
 export async function createCampaign(
   userId: string,
@@ -18,6 +21,7 @@ export async function createCampaign(
   const id = generateId();
   const fundingAddress = await createCampaignWallet(id);
   const identityHashes = input.recipients.map((r: string) => hashIdentity(input.authMethod, r).toString("hex"));
+  const eligibilityRoot = (await buildMerkleRoot(identityHashes, env.zk.merkleDepth)).toString("hex");
 
   const doc: CampaignDoc = {
     id,
@@ -36,12 +40,20 @@ export async function createCampaign(
     fundedAmount: 0,
     requireCompliance: input.requireCompliance || false,
     eligibleHashes: identityHashes,
+    eligibilityRoot,
     selectedWinners: input.type === "escrow" ? [] : undefined,
     status: "active",
     createdAt: Date.now(),
   };
 
   await campaignsCollection().insertOne(doc);
+
+  try {
+    await initializeAnalyticsForCampaign(id);
+  } catch (error) {
+    console.error("Failed to initialize on-chain analytics:", error);
+  }
+
   return { campaign: toPublic(doc), fundingAddress, identityHashes };
 }
 
@@ -116,7 +128,17 @@ export async function addRecipients(id: string, userId: string, recipients: stri
   const uniqueNew = newHashes.filter((h: string) => !doc.eligibleHashes.includes(h));
 
   if (uniqueNew.length > 0) {
-    await col.updateOne({ id }, { $push: { eligibleHashes: { $each: uniqueNew } } });
+    const updatedHashes = doc.eligibleHashes.concat(uniqueNew);
+    const eligibilityRoot = (await buildMerkleRoot(updatedHashes, env.zk.merkleDepth)).toString("hex");
+    await col.updateOne({ id }, { $set: { eligibleHashes: updatedHashes, eligibilityRoot } });
+
+    if (doc.status === "dispute") {
+      try {
+        await inco.setEligibilityRoot(id, Buffer.from(eligibilityRoot, "hex"));
+      } catch (error) {
+        console.error("Failed to update on-chain eligibility root:", error);
+      }
+    }
   }
 
   return { added: uniqueNew.length };
@@ -213,5 +235,8 @@ function toPublic(doc: CampaignDoc): CampaignPublic {
     participantCount: doc.eligibleHashes.length,
     winnersCount: doc.selectedWinners?.length,
     status: doc.status,
+    votingClosedAt: doc.votingClosedAt,
+    disputeOutcome: doc.disputeOutcome,
+    voteResults: doc.voteResults,
   };
 }
