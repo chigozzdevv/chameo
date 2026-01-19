@@ -2,8 +2,12 @@ import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { Program, AnchorProvider, BN } from "@coral-xyz/anchor";
 import { decrypt } from "@inco/solana-sdk/attested-decrypt";
 
-const PROGRAM_ID = new PublicKey("GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU");
-const INCO_LIGHTNING_ID = new PublicKey("5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj");
+const PROGRAM_ID = new PublicKey(
+  "GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU",
+);
+const INCO_LIGHTNING_ID = new PublicKey(
+  "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj",
+);
 const RPC_URL = "https://api.devnet.solana.com";
 
 export interface WalletAdapter {
@@ -22,8 +26,11 @@ function getCampaignIdBytes(campaignId: string): number[] {
 
 function findVotingPoolPda(campaignId: string): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [new TextEncoder().encode("voting_pool"), new Uint8Array(getCampaignIdBytes(campaignId))],
-    PROGRAM_ID
+    [
+      new TextEncoder().encode("voting_pool"),
+      new Uint8Array(getCampaignIdBytes(campaignId)),
+    ],
+    PROGRAM_ID,
   );
 }
 
@@ -38,11 +45,13 @@ export async function getVotingInfo(campaignId: string): Promise<{
 
 export async function revealResults(
   wallet: WalletAdapter,
-  campaignId: string
+  campaignId: string,
 ): Promise<{ refundHost: number; equalDistribution: number }> {
   const connection = new Connection(RPC_URL, "confirmed");
-  const idl = await fetch("/idl/chameo_privacy.json").then(r => r.json());
-  const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
+  const idl = await fetch("/idl/chameo_privacy.json").then((r) => r.json());
+  const provider = new AnchorProvider(connection, wallet as any, {
+    commitment: "confirmed",
+  });
   const program = new Program(idl, provider);
 
   const [votingPool] = findVotingPoolPda(campaignId);
@@ -76,7 +85,10 @@ export async function getZkConfig(campaignId: string): Promise<{
   return response.json();
 }
 
-export async function getZkInputs(campaignId: string, identityHash: string): Promise<{
+export async function getZkInputs(
+  campaignId: string,
+  identityHash: string,
+): Promise<{
   merkleRoot: string;
   leaf: string;
   siblings: string[];

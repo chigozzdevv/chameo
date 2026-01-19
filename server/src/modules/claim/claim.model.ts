@@ -5,7 +5,7 @@ import type { ComplianceCheckResult } from "@/modules/compliance";
 export interface ClaimDoc {
   campaignId: string;
   identityHash: string;
-  walletAddress: string;
+  walletAddress?: string;
   amount: number;
   signature: string;
   compliance: ComplianceCheckResult | null;

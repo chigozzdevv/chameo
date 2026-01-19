@@ -7,6 +7,8 @@ coverage/
 .nyc_output/
 *.tsbuildinfo
 cache/
+client/.next/
+client/out/
 
 # Keypairs
 *-keypair.json

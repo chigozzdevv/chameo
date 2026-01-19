@@ -13,6 +13,17 @@ export interface ClaimResult {
   compliance: ComplianceCheckResult | null;
 }
 
+function sanitizeCompliance(result: ComplianceCheckResult): ComplianceCheckResult {
+  return {
+    ...result,
+    assessment: {
+      ...result.assessment,
+      address: "",
+      flags: [],
+    },
+  };
+}
+
 export async function processClaim(campaignId: string, token: string, walletAddress: string): Promise<ClaimResult> {
   const tokenResult = await validateVerificationToken(token, campaignId);
   if (!tokenResult.valid) throw new BadRequestError(tokenResult.error || "Invalid token");
@@ -48,7 +59,6 @@ export async function processClaim(campaignId: string, token: string, walletAddr
       $setOnInsert: {
         campaignId,
         identityHash,
-        walletAddress,
         amount: campaign.payoutAmount,
         signature: "",
         compliance: null,
@@ -66,11 +76,13 @@ export async function processClaim(campaignId: string, token: string, walletAddr
 
   try {
     // Compliance screening is mandatory for every claim.
-    compliance = await checkWalletCompliance(walletAddress);
-    if (!compliance.isCompliant) {
+    const complianceResult = await checkWalletCompliance(walletAddress);
+    const sanitizedCompliance = sanitizeCompliance(complianceResult);
+    compliance = sanitizedCompliance;
+    if (!complianceResult.isCompliant) {
       await claimsCollection().deleteOne({ campaignId, identityHash });
       await trackEvent({ campaignId, eventType: "claim-failure", identityHash, metadata: { reason: "compliance" } });
-      throw new BadRequestError(compliance.blockedReason || "Wallet failed compliance check");
+      throw new BadRequestError(complianceResult.blockedReason || "Wallet failed compliance check");
     }
 
     await trackEvent({ campaignId, eventType: "claim-attempt", identityHash });
@@ -78,7 +90,10 @@ export async function processClaim(campaignId: string, token: string, walletAddr
     const keys = await getCampaignWalletKeys(campaignId);
     const result = await withdraw(keys, campaign.payoutAmount, walletAddress);
 
-    await claimsCollection().updateOne({ campaignId, identityHash }, { $set: { signature: result.signature, compliance } });
+    await claimsCollection().updateOne(
+      { campaignId, identityHash },
+      { $set: { signature: result.signature, compliance }, $unset: { walletAddress: "" } }
+    );
 
     await incrementClaimCount(campaignId);
     await deductFunds(campaignId, campaign.payoutAmount);
