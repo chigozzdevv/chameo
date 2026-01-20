@@ -12,6 +12,8 @@ export type CampaignSummary = {
   name: string;
   type: "payout" | "escrow";
   status: string;
+  claimCount?: number;
+  maxClaims?: number;
 };
 
 export type FundingStatus = {

@@ -56,7 +56,8 @@ export const discordProvider: AuthProvider = {
         return { valid: false, error: "Failed to get user info" };
       }
 
-      return { valid: true, identifier: userData.id };
+      const identifier = userData.username ? userData.username.toLowerCase() : userData.id;
+      return { valid: true, identifier };
     } catch (error) {
       console.error("Discord verification error:", error);
       return { valid: false, error: "Discord verification failed" };

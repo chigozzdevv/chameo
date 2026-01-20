@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { clearAuthSession, getAuthUser } from "@/lib/auth";
+import { clearAuthSession, getAuthUser, type AuthUser } from "@/lib/auth";
 
 export default function DashboardHeader() {
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const user = getAuthUser();
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const orgLabel = useMemo(() => {
     if (!user?.orgSlug) return "Chameo";
@@ -21,6 +21,10 @@ export default function DashboardHeader() {
     const value = user?.email || orgLabel;
     return value.slice(0, 2).toUpperCase();
   }, [orgLabel, user?.email]);
+
+  useEffect(() => {
+    setUser(getAuthUser());
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -46,7 +50,7 @@ export default function DashboardHeader() {
   };
 
   return (
-    <header className="rounded-[2rem] border border-white/70 bg-white/70 px-6 py-5 shadow-[0_25px_60px_rgba(15,23,42,0.12)] backdrop-blur lg:rounded-none lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:shadow-none">
+    <header className="relative z-40 rounded-[2rem] border border-white/70 bg-white/70 px-6 py-5 shadow-[0_25px_60px_rgba(15,23,42,0.12)] backdrop-blur lg:rounded-none lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:shadow-none">
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center">
         <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600">
           <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">
@@ -72,7 +76,7 @@ export default function DashboardHeader() {
 
         <div className="flex items-center justify-end gap-3">
           <Link
-            href="/dashboard/campaigns"
+            href="/dashboard/campaigns?create=1"
             className="group inline-flex items-center gap-3 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
           >
             Create private payout
@@ -91,7 +95,7 @@ export default function DashboardHeader() {
               {initials}
             </button>
             {open && (
-              <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-white/60 bg-white/95 p-3 text-sm text-slate-700 shadow-[0_25px_60px_rgba(15,23,42,0.12)]">
+              <div className="absolute right-0 z-50 mt-3 w-56 rounded-2xl border border-white/60 bg-white/95 p-3 text-sm text-slate-700 shadow-[0_25px_60px_rgba(15,23,42,0.12)]">
                 <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                   Signed in as
                 </div>

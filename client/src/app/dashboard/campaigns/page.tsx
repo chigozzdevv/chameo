@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   createCampaign,
   listCampaigns,
@@ -18,6 +19,8 @@ const themeDefaults: CampaignTheme = {
 };
 
 export default function CampaignsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("All");
@@ -60,6 +63,13 @@ export default function CampaignsPage() {
   }, []);
 
   useEffect(() => {
+    if (searchParams.get("create") !== "1") return;
+    setShowCreate(true);
+    setStep(1);
+    setStatus(null);
+  }, [searchParams]);
+
+  useEffect(() => {
     if (imageFile) {
       const objectUrl = URL.createObjectURL(imageFile);
       setPreview(objectUrl);
@@ -81,6 +91,40 @@ export default function CampaignsPage() {
       .filter(Boolean);
 
   const recipientsList = useMemo(() => parseRecipients(), [form.recipients]);
+  const authHint = useMemo(() => {
+    switch (form.authMethod) {
+      case "email":
+        return {
+          placeholder: "sam@gmail.com\naustin@domain.com",
+          helper: "Enter emails separated by commas or new lines.",
+        };
+      case "twitter":
+        return {
+          placeholder: "chigozzdev\nsammy",
+          helper: "Enter X usernames separated by commas or new lines.",
+        };
+      case "github":
+        return {
+          placeholder: "octocat\nsammy",
+          helper: "Enter GitHub usernames separated by commas or new lines.",
+        };
+      case "discord":
+        return {
+          placeholder: "sammy\nchigozzdev",
+          helper: "Enter Discord usernames separated by commas or new lines.",
+        };
+      case "telegram":
+        return {
+          placeholder: "sammy\nchigozzdev",
+          helper: "Enter Telegram usernames separated by commas or new lines.",
+        };
+      default:
+        return {
+          placeholder: "identifier",
+          helper: "Enter identifiers separated by commas or new lines.",
+        };
+    }
+  }, [form.authMethod]);
 
   const validateBasics = () => {
     if (!form.name.trim()) {
@@ -117,6 +161,9 @@ export default function CampaignsPage() {
     setShowCreate(false);
     setStep(1);
     setStatus(null);
+    if (searchParams.get("create") === "1") {
+      router.replace("/dashboard/campaigns");
+    }
   };
 
   const handleCreateCampaign = async () => {
@@ -370,6 +417,9 @@ export default function CampaignsPage() {
                       min="1"
                       className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-slate-400 focus:outline-none"
                     />
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                      Total recipients that can claim.
+                    </span>
                   </label>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
@@ -396,10 +446,13 @@ export default function CampaignsPage() {
                 </div>
                 <label className="grid gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                   Eligible recipients
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    {authHint.helper}
+                  </span>
                   <textarea
                     value={form.recipients}
                     onChange={(event) => setForm((prev) => ({ ...prev, recipients: event.target.value }))}
-                    placeholder="email@domain.com\n@handle"
+                    placeholder={authHint.placeholder}
                     className="min-h-[120px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-slate-400 focus:outline-none"
                   />
                 </label>

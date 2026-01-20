@@ -51,7 +51,8 @@ export const telegramProvider: AuthProvider = {
         return { valid: false, error: "Telegram auth expired" };
       }
 
-      return { valid: true, identifier: authData.id };
+      const identifier = authData.username ? authData.username.toLowerCase() : authData.id;
+      return { valid: true, identifier };
     } catch (error) {
       console.error("Telegram verification error:", error);
       return { valid: false, error: "Telegram verification failed" };

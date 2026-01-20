@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
 import { decryptAnalytics, type AnalyticsHandles, type WalletAdapter } from "@/lib/analytics";
@@ -27,6 +27,7 @@ const fallbackMetrics: DecryptedMetrics = {
 
 export default function AnalyticsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
   const [activeCampaignId, setActiveCampaignId] = useState<string>("");
   const [handles, setHandles] = useState<AnalyticsHandles | null>(null);
@@ -50,8 +51,11 @@ export default function AnalyticsPage() {
       token
     )
       .then((res) => {
+        const preferred = searchParams.get("campaignId");
         setCampaigns(res.campaigns || []);
-        if (res.campaigns?.length) {
+        if (preferred && res.campaigns?.some((campaign) => campaign.id === preferred)) {
+          setActiveCampaignId(preferred);
+        } else if (res.campaigns?.length) {
           setActiveCampaignId(res.campaigns[0].id);
         } else {
           setActiveCampaignId("__create__");
@@ -60,7 +64,7 @@ export default function AnalyticsPage() {
       .catch(() => {
         setCampaigns([]);
       });
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -225,28 +229,6 @@ export default function AnalyticsPage() {
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-white/70 bg-white/80 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.1)] backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
-              Activity
-            </p>
-            <h3 className="mt-2 text-lg font-semibold text-slate-900">
-              Recent signals
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={() => router.push("/dashboard/campaigns")}
-            className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600"
-          >
-            Manage campaigns
-          </button>
-        </div>
-        <div className="mt-6 rounded-2xl border border-dashed border-slate-200 bg-white/90 px-5 py-6 text-sm text-slate-500">
-          No events yet. Analytics will populate as recipients view and claim.
-        </div>
-      </section>
     </div>
   );
 }
