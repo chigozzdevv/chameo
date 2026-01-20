@@ -3,7 +3,13 @@ import { getDb } from "@/config";
 
 export interface AnalyticsEvent {
   campaignId: string;
-  eventType: "view" | "claim-attempt" | "claim-success" | "claim-failure" | "vote";
+  eventType:
+    | "view"
+    | "link-click"
+    | "claim-attempt"
+    | "claim-success"
+    | "claim-failure"
+    | "vote";
   identityHash?: string;
   metadata?: Record<string, any>;
   timestamp: number;

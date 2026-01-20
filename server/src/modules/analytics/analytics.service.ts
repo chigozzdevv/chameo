@@ -1,4 +1,4 @@
-import { analyticsEventsCollection, campaignAnalyticsCollection, type AnalyticsEvent } from "./analytics.model";
+import type { AnalyticsEvent } from "./analytics.model";
 import * as inco from "@/lib/inco";
 import { PublicKey } from "@solana/web3.js";
 
@@ -13,43 +13,25 @@ export async function initializeAnalyticsForCampaign(campaignId: string): Promis
 }
 
 export async function trackEvent(event: Omit<AnalyticsEvent, "timestamp">): Promise<void> {
-  await analyticsEventsCollection().insertOne({
-    ...event,
-    timestamp: Date.now(),
-  });
-
-  const updateFields: Record<string, number> = {};
   let incoEventType: 0 | 1 | 2 | null = null;
 
   switch (event.eventType) {
     case "view":
-      updateFields.views = 1;
       incoEventType = 0;
       break;
-    case "claim-attempt":
-      updateFields.claimAttempts = 1;
-      break;
-    case "claim-success":
-      updateFields.claimSuccesses = 1;
+    case "link-click":
       incoEventType = 1;
       break;
-    case "claim-failure":
-      updateFields.claimFailures = 1;
+    case "claim-attempt":
       incoEventType = 2;
       break;
+    case "claim-success":
+      break;
+    case "claim-failure":
+      break;
     case "vote":
-      updateFields.votes = 1;
       break;
   }
-
-  await campaignAnalyticsCollection().updateOne(
-    { campaignId: event.campaignId },
-    {
-      $inc: updateFields,
-      $set: { lastUpdated: Date.now() },
-    },
-    { upsert: true }
-  );
 
   if (incoEventType !== null) {
     try {
@@ -61,9 +43,8 @@ export async function trackEvent(event: Omit<AnalyticsEvent, "timestamp">): Prom
 }
 
 export async function getCampaignAnalytics(campaignId: string) {
-  const analytics = await campaignAnalyticsCollection().findOne({ campaignId });
   return (
-    analytics || {
+    {
       campaignId,
       views: 0,
       claimAttempts: 0,
@@ -76,7 +57,15 @@ export async function getCampaignAnalytics(campaignId: string) {
 }
 
 export async function getRecentEvents(campaignId: string, limit: number = 100) {
-  return analyticsEventsCollection().find({ campaignId }).sort({ timestamp: -1 }).limit(limit).toArray();
+  return [];
+}
+
+export async function getAnalyticsHandles(campaignId: string): Promise<{
+  pageViewsHandle: string;
+  linkClicksHandle: string;
+  claimStartsHandle: string;
+} | null> {
+  return inco.getAnalyticsHandles(campaignId);
 }
 
 export async function grantAnalyticsAccess(

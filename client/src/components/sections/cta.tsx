@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { isAuthenticated } from "@/lib/api";
+import { isAuthenticated } from "@/lib/auth";
 
 export default function Cta() {
   const router = useRouter();

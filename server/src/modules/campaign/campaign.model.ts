@@ -5,6 +5,12 @@ export type AuthMethod = "email" | "twitter" | "discord" | "github" | "telegram"
 export type CampaignType = "payout" | "escrow";
 export type CampaignStatus = "active" | "winners-announced" | "dispute" | "closed";
 
+export interface CampaignTheme {
+  primary?: string;
+  secondary?: string;
+  background?: string;
+}
+
 export interface CampaignDoc {
   id: string;
   userId: string;
@@ -24,9 +30,13 @@ export interface CampaignDoc {
   requireCompliance: boolean;
   eligibleHashes: string[];
   eligibilityRoot?: string;
+  theme?: CampaignTheme;
   selectedWinners?: string[];
   status: CampaignStatus;
   votingClosedAt?: number;
+  disputeStartedAt?: number;
+  disputeEndsAt?: number;
+  refundAddress?: string;
   disputeOutcome?: "refund-host" | "equal-distribution" | "tie";
   voteResults?: {
     refundHost: number;
@@ -48,6 +58,8 @@ export interface CreateCampaignInput {
   expiresAt: number;
   winnersDeadline?: number;
   recipients: string[];
+  refundAddress?: string;
+  theme?: CampaignTheme;
   requireCompliance?: boolean;
 }
 
@@ -69,8 +81,11 @@ export interface CampaignPublic {
   requireCompliance: boolean;
   participantCount: number;
   winnersCount?: number;
+  theme?: CampaignTheme;
   status: CampaignStatus;
   votingClosedAt?: number;
+  disputeStartedAt?: number;
+  disputeEndsAt?: number;
   disputeOutcome?: "refund-host" | "equal-distribution" | "tie";
   voteResults?: {
     refundHost: number;

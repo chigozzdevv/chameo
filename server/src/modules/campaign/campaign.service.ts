@@ -19,7 +19,6 @@ export async function createCampaign(
   input: CreateCampaignInput
 ): Promise<{ campaign: CampaignPublic; fundingAddress: string; identityHashes: string[] }> {
   const id = generateId();
-  const fundingAddress = await createCampaignWallet(id);
   const identityHashes = input.recipients.map((r: string) => hashIdentity(input.authMethod, r).toString("hex"));
   const eligibilityRoot = (await buildMerkleRoot(identityHashes, env.zk.merkleDepth)).toString("hex");
 
@@ -38,15 +37,24 @@ export async function createCampaign(
     winnersDeadline: input.winnersDeadline,
     funded: false,
     fundedAmount: 0,
-    requireCompliance: input.requireCompliance || false,
+    requireCompliance: true,
     eligibleHashes: identityHashes,
     eligibilityRoot,
+    theme: input.theme,
     selectedWinners: input.type === "escrow" ? [] : undefined,
     status: "active",
+    refundAddress: input.refundAddress,
     createdAt: Date.now(),
   };
 
   await campaignsCollection().insertOne(doc);
+  let fundingAddress: string;
+  try {
+    fundingAddress = await createCampaignWallet(id);
+  } catch (error) {
+    await campaignsCollection().deleteOne({ id });
+    throw error;
+  }
 
   try {
     await initializeAnalyticsForCampaign(id);
@@ -71,28 +79,37 @@ export async function getUserCampaigns(userId: string): Promise<CampaignPublic[]
   return docs.map(toPublic);
 }
 
-export async function checkFunding(id: string): Promise<{ balance: number; totalRequired: number; funded: boolean; depositTx?: string }> {
+export async function checkFunding(
+  id: string
+): Promise<{
+  balance: number;
+  totalRequired: number;
+  funded: boolean;
+  depositTx?: string;
+  onChainBalance: number;
+  campaignWallet: string;
+}> {
   const col = campaignsCollection();
   const doc = await col.findOne({ id });
   if (!doc) throw new NotFoundError("Campaign not found");
 
   const totalRequired = doc.payoutAmount * doc.maxClaims;
+  const campaignWallet = await getCampaignWalletPublicKey(id);
+  let onChainBalance = await connection.getBalance(new PublicKey(campaignWallet));
   let pcBalance = await getCampaignPrivateBalance(id);
 
   // Auto-deposit if funds are on-chain but not in Privacy Cash
   if (pcBalance < totalRequired) {
-    const publicKey = await getCampaignWalletPublicKey(id);
-    const onChainBalance = await connection.getBalance(new PublicKey(publicKey));
-
     if (onChainBalance > 0) {
       const { signature } = await depositToCampaign(id, onChainBalance);
       pcBalance = await getCampaignPrivateBalance(id);
+      onChainBalance = await connection.getBalance(new PublicKey(campaignWallet));
       const funded = pcBalance >= totalRequired;
 
       if (funded && !doc.funded) {
         await col.updateOne({ id }, { $set: { funded: true, fundedAmount: pcBalance } });
       }
-      return { balance: pcBalance, totalRequired, funded, depositTx: signature };
+      return { balance: pcBalance, totalRequired, funded, depositTx: signature, onChainBalance, campaignWallet };
     }
   }
 
@@ -101,7 +118,7 @@ export async function checkFunding(id: string): Promise<{ balance: number; total
     await col.updateOne({ id }, { $set: { funded: true, fundedAmount: pcBalance } });
   }
 
-  return { balance: pcBalance, totalRequired, funded };
+  return { balance: pcBalance, totalRequired, funded, onChainBalance, campaignWallet };
 }
 
 export async function isEligible(campaignId: string, identityHash: string): Promise<boolean> {
@@ -154,8 +171,9 @@ export async function closeCampaign(
 
   if (!doc) throw new NotFoundError("Campaign not found");
   if (doc.userId !== userId) throw new ForbiddenError("Not authorized");
-  if (doc.status === "closed") throw new BadRequestError("Campaign already closed");
-  if (doc.expiresAt > Date.now() / 1000) throw new BadRequestError("Campaign not yet expired");
+  const allowEarlyRefund = doc.disputeOutcome === "refund-host" || doc.disputeOutcome === "tie";
+  if (doc.status === "closed" && !allowEarlyRefund) throw new BadRequestError("Campaign already closed");
+  if (!allowEarlyRefund && doc.expiresAt > Date.now() / 1000) throw new BadRequestError("Campaign not yet expired");
 
   const balance = await getCampaignPrivateBalance(id);
 
@@ -200,6 +218,26 @@ export async function updateCampaignImage(id: string, userId: string, imageUrl: 
   await col.updateOne({ id }, { $set: { imageUrl } });
 }
 
+export async function updateCampaignTheme(id: string, userId: string, theme: CampaignDoc["theme"]): Promise<void> {
+  const col = campaignsCollection();
+  const doc = await col.findOne({ id });
+
+  if (!doc) throw new NotFoundError("Campaign not found");
+  if (doc.userId !== userId) throw new ForbiddenError("Not authorized");
+
+  await col.updateOne({ id }, { $set: { theme } });
+}
+
+export async function updateRefundAddress(id: string, userId: string, refundAddress: string): Promise<void> {
+  const col = campaignsCollection();
+  const doc = await col.findOne({ id });
+
+  if (!doc) throw new NotFoundError("Campaign not found");
+  if (doc.userId !== userId) throw new ForbiddenError("Not authorized");
+
+  await col.updateOne({ id }, { $set: { refundAddress } });
+}
+
 export async function checkAndTriggerDispute(id: string): Promise<void> {
   const col = campaignsCollection();
   const doc = await col.findOne({ id });
@@ -209,10 +247,37 @@ export async function checkAndTriggerDispute(id: string): Promise<void> {
   if (doc.status !== "active") return;
   if (!doc.winnersDeadline) return;
 
-  const now = Date.now() / 1000;
-  if (now > doc.winnersDeadline && (!doc.selectedWinners || doc.selectedWinners.length === 0)) {
-    await col.updateOne({ id }, { $set: { status: "dispute" } });
+  const now = Math.floor(Date.now() / 1000);
+  if (now <= doc.winnersDeadline) return;
+  if (doc.selectedWinners && doc.selectedWinners.length > 0) return;
+  if (!env.zk.verifierProgramId) throw new BadRequestError("ZK verifier not configured");
+
+  const eligibilityRoot = await buildMerkleRoot(doc.eligibleHashes, env.zk.merkleDepth);
+  const eligibilityRootHex = eligibilityRoot.toString("hex");
+  const disputeStartedAt = now;
+  const disputeEndsAt = now + env.voting.disputeWindowSeconds;
+  const zkVerifierProgram = new PublicKey(env.zk.verifierProgramId);
+
+  try {
+    await inco.initializeVotingPool(id, eligibilityRoot, zkVerifierProgram);
+  } catch (error: any) {
+    if (!error.message?.includes("already in use")) {
+      throw error;
+    }
+    await inco.setEligibilityRoot(id, eligibilityRoot);
   }
+
+  await col.updateOne(
+    { id },
+    {
+      $set: {
+        status: "dispute",
+        disputeStartedAt,
+        disputeEndsAt,
+        eligibilityRoot: eligibilityRootHex,
+      },
+    }
+  );
 }
 
 function toPublic(doc: CampaignDoc): CampaignPublic {
@@ -234,8 +299,11 @@ function toPublic(doc: CampaignDoc): CampaignPublic {
     requireCompliance: doc.requireCompliance,
     participantCount: doc.eligibleHashes.length,
     winnersCount: doc.selectedWinners?.length,
+    theme: doc.theme,
     status: doc.status,
     votingClosedAt: doc.votingClosedAt,
+    disputeStartedAt: doc.disputeStartedAt,
+    disputeEndsAt: doc.disputeEndsAt,
     disputeOutcome: doc.disputeOutcome,
     voteResults: doc.voteResults,
   };

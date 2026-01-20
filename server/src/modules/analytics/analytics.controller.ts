@@ -12,8 +12,15 @@ router.get("/:campaignId", authMiddleware, async (req: Request<{ campaignId: str
     if (!campaign) throw new NotFoundError("Campaign not found");
     if (campaign.userId !== req.user!.userId) throw new ForbiddenError();
 
-    const analytics = await analyticsService.getCampaignAnalytics(req.params.campaignId);
-    res.json({ success: true, analytics });
+    const handles = await analyticsService.getAnalyticsHandles(req.params.campaignId);
+    res.json({
+      success: true,
+      handles: handles || {
+        pageViewsHandle: "0",
+        linkClicksHandle: "0",
+        claimStartsHandle: "0",
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -31,6 +38,31 @@ router.get("/:campaignId/events", authMiddleware, async (req: Request<{ campaign
     next(error);
   }
 });
+
+router.get(
+  "/:campaignId/handles",
+  authMiddleware,
+  async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
+    try {
+      const campaign = await getCampaignDoc(req.params.campaignId);
+      if (!campaign) throw new NotFoundError("Campaign not found");
+      if (campaign.userId !== req.user!.userId) throw new ForbiddenError();
+
+      const handles = await analyticsService.getAnalyticsHandles(req.params.campaignId);
+      res.json({
+        success: true,
+        available: !!handles,
+        handles: handles || {
+          pageViewsHandle: "0",
+          linkClicksHandle: "0",
+          claimStartsHandle: "0",
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 router.post(
   "/:campaignId/grant-access",

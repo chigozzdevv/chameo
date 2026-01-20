@@ -1,6 +1,7 @@
 import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { Program, AnchorProvider, BN } from "@coral-xyz/anchor";
 import { decrypt } from "@inco/solana-sdk/attested-decrypt";
+import { apiFetch } from "@/lib/api";
 
 const PROGRAM_ID = new PublicKey(
   "GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU",
@@ -39,8 +40,7 @@ export async function getVotingInfo(campaignId: string): Promise<{
   totalVotes?: number;
   isActive?: boolean;
 }> {
-  const response = await fetch(`/api/voting/${campaignId}/info`);
-  return response.json();
+  return apiFetch(`/api/voting/${campaignId}/info`);
 }
 
 export async function revealResults(
@@ -81,8 +81,7 @@ export async function getZkConfig(campaignId: string): Promise<{
   publicWitnessLength: number;
   verifierProgramId: string;
 }> {
-  const response = await fetch(`/api/voting/${campaignId}/zk-config`);
-  return response.json();
+  return apiFetch(`/api/voting/${campaignId}/zk-config`);
 }
 
 export async function getZkInputs(
@@ -95,12 +94,24 @@ export async function getZkInputs(
   pathBits: number[];
   index: number;
 }> {
-  const response = await fetch(`/api/voting/${campaignId}/zk-inputs`, {
+  return apiFetch(`/api/voting/${campaignId}/zk-inputs`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ identityHash }),
   });
-  return response.json();
+}
+
+export async function buildZkProof(params: {
+  campaignId: string;
+  identityHash: string;
+  ciphertext: string;
+}): Promise<{ proof: string; publicWitness: string; nullifier: string }> {
+  return apiFetch(`/api/voting/${params.campaignId}/zk-prove`, {
+    method: "POST",
+    body: JSON.stringify({
+      identityHash: params.identityHash,
+      ciphertext: params.ciphertext,
+    }),
+  });
 }
 
 export async function castVoteZk(params: {
@@ -110,9 +121,8 @@ export async function castVoteZk(params: {
   nullifier: string;
   ciphertext: string;
 }): Promise<{ signature: string }> {
-  const response = await fetch(`/api/voting/${params.campaignId}/zk-cast`, {
+  return apiFetch(`/api/voting/${params.campaignId}/zk-cast`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       proof: params.proof,
       publicWitness: params.publicWitness,
@@ -120,7 +130,6 @@ export async function castVoteZk(params: {
       ciphertext: params.ciphertext,
     }),
   });
-  return response.json();
 }
 
 function hexToBuffer(hex: string): Uint8Array {

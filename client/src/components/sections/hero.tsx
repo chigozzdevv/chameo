@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { isAuthenticated } from "@/lib/api";
+import { isAuthenticated } from "@/lib/auth";
 
 const easeOut: [number, number, number, number] = [0.16, 1, 0.3, 1];
 

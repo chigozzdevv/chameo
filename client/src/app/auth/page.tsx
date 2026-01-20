@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { z } from "zod";
-import { login, signup, setAuthSession, isAuthenticated } from "@/lib/api";
+import { login, signup, setAuthSession, isAuthenticated } from "@/lib/auth";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),

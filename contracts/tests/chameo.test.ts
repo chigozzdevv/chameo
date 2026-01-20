@@ -325,7 +325,6 @@ describe("chameo-privacy integration", () => {
 
     const accountTypes = (idl as any).accounts.map((account: any) => account.name);
     assert.ok(accountTypes.includes("VotingPool"));
-    assert.ok(accountTypes.includes("Vote"));
     assert.ok(accountTypes.includes("Nullifier"));
 
     const castVoteZk = (idl as any).instructions.find((ix: any) => ix.name === "cast_vote_zk");
@@ -454,10 +453,11 @@ describe("chameo-privacy integration", () => {
     const [allowanceEqual] = findAllowancePda(equalHandle, walletKeypair.publicKey);
 
     await program.methods
-      .closeVoting(zkCampaignIdBytes)
+      .closeVoting(zkCampaignIdBytes, walletKeypair.publicKey)
       .accounts({
         votingPool: zkVotingPool,
         authority: walletKeypair.publicKey,
+        allowedAddress: walletKeypair.publicKey,
         allowanceRefund,
         allowanceEqual,
         incoLightningProgram: INCO_LIGHTNING_ID,

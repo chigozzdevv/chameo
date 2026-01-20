@@ -2,19 +2,34 @@ import { env } from "@/config";
 import type { AuthProvider, SocialVerificationResult } from "./types";
 
 export const discordProvider: AuthProvider = {
-  getAuthUrl(campaignId: string, redirectUri: string): string {
+  getAuthUrl({ redirectUri, state }: { campaignId: string; redirectUri: string; state: string }): string {
+    if (!env.oauth.discord.clientId || !env.oauth.discord.clientSecret) {
+      throw new Error("Discord OAuth not configured");
+    }
     const params = new URLSearchParams({
       client_id: env.oauth.discord.clientId,
       redirect_uri: redirectUri,
       response_type: "code",
       scope: "identify",
-      state: campaignId,
+      state,
     });
     return `https://discord.com/api/oauth2/authorize?${params}`;
   },
 
-  async verify(code: string): Promise<SocialVerificationResult> {
+  async verify({
+    code,
+    redirectUri,
+  }: {
+    code?: string;
+    redirectUri?: string;
+  }): Promise<SocialVerificationResult> {
     try {
+      if (!code) {
+        return { valid: false, error: "Missing authorization code" };
+      }
+      if (!env.oauth.discord.clientId || !env.oauth.discord.clientSecret) {
+        return { valid: false, error: "Discord OAuth not configured" };
+      }
       const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -23,7 +38,7 @@ export const discordProvider: AuthProvider = {
           client_secret: env.oauth.discord.clientSecret,
           grant_type: "authorization_code",
           code,
-          redirect_uri: env.oauth.discord.redirectUri,
+          redirect_uri: redirectUri || env.oauth.discord.redirectUri,
         }),
       });
 

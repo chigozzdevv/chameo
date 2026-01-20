@@ -3,17 +3,30 @@ import { env } from "@/config";
 import type { AuthProvider, SocialVerificationResult } from "./types";
 
 export const telegramProvider: AuthProvider = {
-  getAuthUrl(campaignId: string, redirectUri: string): string {
+  getAuthUrl({ redirectUri, state }: { campaignId: string; redirectUri: string; state: string }): string {
+    if (!env.oauth.telegram.botId || !env.oauth.telegram.botToken) {
+      throw new Error("Telegram OAuth not configured");
+    }
+    const returnTo = new URL(redirectUri);
+    returnTo.searchParams.set("state", state);
+    const origin = new URL(redirectUri).origin;
     const params = new URLSearchParams({
       bot_id: env.oauth.telegram.botId,
-      origin: redirectUri,
-      return_to: `${redirectUri}?state=${campaignId}`,
+      origin,
+      return_to: returnTo.toString(),
     });
     return `https://oauth.telegram.org/auth?${params}`;
   },
 
-  async verify(_code: string, authData?: Record<string, string>): Promise<SocialVerificationResult> {
+  async verify({
+    authData,
+  }: {
+    authData?: Record<string, string>;
+  }): Promise<SocialVerificationResult> {
     try {
+      if (!env.oauth.telegram.botToken) {
+        return { valid: false, error: "Telegram OAuth not configured" };
+      }
       if (!authData || !authData.id || !authData.hash || !authData.auth_date) {
         return { valid: false, error: "Missing Telegram auth data" };
       }

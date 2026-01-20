@@ -1,9 +1,10 @@
-import { generateToken, hashIdentity } from "@/shared";
+import { BadRequestError, generateToken, hashIdentity } from "@/shared";
 import { sendEmail } from "@/lib/messaging";
-import { magicLinksCollection, verificationTokensCollection } from "./claim.model";
+import { magicLinksCollection, oauthStatesCollection, verificationTokensCollection } from "./claim.model";
 
 const MAGIC_LINK_EXPIRY_MS = 24 * 60 * 60 * 1000;
 const TOKEN_EXPIRY_MS = 30 * 60 * 1000;
+const OAUTH_STATE_EXPIRY_MS = 10 * 60 * 1000;
 
 export async function sendClaimEmail(email: string, campaignId: string, campaignName: string, payoutAmount: number): Promise<void> {
   const token = await createMagicLink("email", email, campaignId);
@@ -81,4 +82,40 @@ export async function validateVerificationToken(
 
 export async function consumeVerificationToken(token: string): Promise<void> {
   await verificationTokensCollection().deleteOne({ token });
+}
+
+export async function createOAuthState(params: {
+  provider: string;
+  campaignId: string;
+  redirectUri: string;
+  codeVerifier?: string;
+}): Promise<string> {
+  const state = generateToken();
+  await oauthStatesCollection().insertOne({
+    state,
+    provider: params.provider,
+    campaignId: params.campaignId,
+    redirectUri: params.redirectUri,
+    codeVerifier: params.codeVerifier,
+    createdAt: Date.now(),
+    expiresAt: new Date(Date.now() + OAUTH_STATE_EXPIRY_MS),
+  });
+  return state;
+}
+
+export async function consumeOAuthState(state: string, provider: string): Promise<{
+  campaignId: string;
+  redirectUri: string;
+  codeVerifier?: string;
+}> {
+  const doc = await oauthStatesCollection().findOneAndDelete({ state, provider });
+  if (!doc) throw new BadRequestError("Invalid or expired state");
+  if (doc.expiresAt < new Date()) {
+    throw new BadRequestError("State expired");
+  }
+  return {
+    campaignId: doc.campaignId,
+    redirectUri: doc.redirectUri,
+    codeVerifier: doc.codeVerifier,
+  };
 }

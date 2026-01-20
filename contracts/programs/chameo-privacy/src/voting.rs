@@ -30,18 +30,6 @@ impl VotingPool {
 }
 
 #[account]
-pub struct Vote {
-    pub campaign_id: [u8; 32],
-    pub voter: Pubkey,
-    pub encrypted_choice: Euint128,
-    pub timestamp: i64,
-}
-
-impl Vote {
-    pub const LEN: usize = 32 + 32 + 16 + 8;
-}
-
-#[account]
 pub struct Nullifier {
     pub campaign_id: [u8; 32],
     pub value: [u8; 32],
@@ -64,31 +52,6 @@ pub struct InitializeVotingPool<'info> {
     pub voting_pool: Account<'info, VotingPool>,
     #[account(mut)]
     pub authority: Signer<'info>,
-    /// CHECK: Inco Lightning program
-    #[account(address = INCO_LIGHTNING_ID)]
-    pub inco_lightning_program: AccountInfo<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(campaign_id: [u8; 32])]
-pub struct CastVote<'info> {
-    #[account(
-        init,
-        payer = voter,
-        space = 8 + Vote::LEN,
-        seeds = [b"vote", campaign_id.as_ref(), voter.key().as_ref()],
-        bump
-    )]
-    pub vote: Account<'info, Vote>,
-    #[account(
-        mut,
-        seeds = [b"voting_pool", campaign_id.as_ref()],
-        bump
-    )]
-    pub voting_pool: Account<'info, VotingPool>,
-    #[account(mut)]
-    pub voter: Signer<'info>,
     /// CHECK: Inco Lightning program
     #[account(address = INCO_LIGHTNING_ID)]
     pub inco_lightning_program: AccountInfo<'info>,
@@ -134,6 +97,8 @@ pub struct CloseVoting<'info> {
     pub voting_pool: Account<'info, VotingPool>,
     #[account(mut)]
     pub authority: Signer<'info>,
+    /// CHECK: Address granted decryption access
+    pub allowed_address: UncheckedAccount<'info>,
     /// CHECK: Allowance account for refund votes
     #[account(mut)]
     pub allowance_refund: AccountInfo<'info>,
@@ -192,52 +157,6 @@ pub fn set_eligibility_root<'info>(
 ) -> Result<()> {
     let voting_pool = &mut ctx.accounts.voting_pool;
     voting_pool.eligibility_root = eligibility_root;
-    Ok(())
-}
-
-pub fn cast_vote<'info>(
-    ctx: Context<'_, '_, '_, 'info, CastVote<'info>>,
-    campaign_id: [u8; 32],
-    encrypted_vote: Vec<u8>,
-) -> Result<()> {
-    let voting_pool = &mut ctx.accounts.voting_pool;
-    require!(voting_pool.is_active, ErrorCode::VotingNotActive);
-    
-    let vote = &mut ctx.accounts.vote;
-    let inco = ctx.accounts.inco_lightning_program.to_account_info();
-    let signer = ctx.accounts.voter.to_account_info();
-    
-    let cpi_ctx = CpiContext::new(inco.clone(), Operation { signer: signer.clone() });
-    let encrypted_choice = new_euint128(cpi_ctx, encrypted_vote, 0)?;
-    
-    vote.campaign_id = campaign_id;
-    vote.voter = ctx.accounts.voter.key();
-    vote.encrypted_choice = encrypted_choice;
-    vote.timestamp = Clock::get()?.unix_timestamp;
-    
-    let cpi_ctx = CpiContext::new(inco.clone(), Operation { signer: signer.clone() });
-    let one = as_euint128(cpi_ctx, 1)?;
-    
-    let cpi_ctx = CpiContext::new(inco.clone(), Operation { signer: signer.clone() });
-    let zero = as_euint128(cpi_ctx, 0)?;
-    
-    let cpi_ctx = CpiContext::new(inco.clone(), Operation { signer: signer.clone() });
-    let is_equal_dist = e_eq(cpi_ctx, encrypted_choice, one, 0)?;
-    
-    let cpi_ctx = CpiContext::new(inco.clone(), Operation { signer: signer.clone() });
-    let add_to_equal = e_select(cpi_ctx, is_equal_dist, one, zero, 0)?;
-    
-    let cpi_ctx = CpiContext::new(inco.clone(), Operation { signer: signer.clone() });
-    voting_pool.equal_distribution_votes = e_add(cpi_ctx, voting_pool.equal_distribution_votes, add_to_equal, 0)?;
-    
-    let cpi_ctx = CpiContext::new(inco.clone(), Operation { signer: signer.clone() });
-    let add_to_refund = e_select(cpi_ctx, is_equal_dist, zero, one, 0)?;
-    
-    let cpi_ctx = CpiContext::new(inco, Operation { signer });
-    voting_pool.refund_host_votes = e_add(cpi_ctx, voting_pool.refund_host_votes, add_to_refund, 0)?;
-    
-    voting_pool.total_votes += 1;
-    
     Ok(())
 }
 
@@ -359,36 +278,41 @@ fn poseidon_hash_bytes(bytes: &[u8]) -> Result<[u8; 32]> {
 pub fn close_voting<'info>(
     ctx: Context<'_, '_, '_, 'info, CloseVoting<'info>>,
     _campaign_id: [u8; 32],
+    allowed_address: Pubkey,
 ) -> Result<()> {
     let voting_pool = &mut ctx.accounts.voting_pool;
     require!(voting_pool.is_active, ErrorCode::VotingNotActive);
     voting_pool.is_active = false;
+    require!(
+        allowed_address == ctx.accounts.allowed_address.key(),
+        ErrorCode::InvalidAllowedAddress
+    );
     
     let inco = ctx.accounts.inco_lightning_program.to_account_info();
     let signer = ctx.accounts.authority.to_account_info();
-    let authority_key = ctx.accounts.authority.key();
+    let allowed_key = ctx.accounts.allowed_address.key();
     
     let cpi_ctx = CpiContext::new(
         inco.clone(),
         Allow {
             allowance_account: ctx.accounts.allowance_refund.to_account_info(),
             signer: signer.clone(),
-            allowed_address: ctx.accounts.authority.to_account_info(),
+            allowed_address: ctx.accounts.allowed_address.to_account_info(),
             system_program: ctx.accounts.system_program.to_account_info(),
         },
     );
-    allow(cpi_ctx, voting_pool.refund_host_votes.0, true, authority_key)?;
+    allow(cpi_ctx, voting_pool.refund_host_votes.0, true, allowed_key)?;
     
     let cpi_ctx = CpiContext::new(
         inco,
         Allow {
             allowance_account: ctx.accounts.allowance_equal.to_account_info(),
             signer,
-            allowed_address: ctx.accounts.authority.to_account_info(),
+            allowed_address: ctx.accounts.allowed_address.to_account_info(),
             system_program: ctx.accounts.system_program.to_account_info(),
         },
     );
-    allow(cpi_ctx, voting_pool.equal_distribution_votes.0, true, authority_key)?;
+    allow(cpi_ctx, voting_pool.equal_distribution_votes.0, true, allowed_key)?;
     
     Ok(())
 }

@@ -1,5 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { BadRequestError } from "@/shared";
+import { BadRequestError, ForbiddenError, NotFoundError } from "@/shared";
+import { authMiddleware } from "@/modules/auth";
+import { getCampaignDoc } from "@/modules/campaign";
 import * as votingService from "./voting.service";
 
 const router = Router();
@@ -26,14 +28,22 @@ router.get("/:campaignId/results", async (req: Request<{ campaignId: string }>, 
   }
 });
 
-router.post("/:campaignId/resolve", async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
-  try {
-    await votingService.resolveDispute(req.params.campaignId);
-    res.json({ success: true });
-  } catch (error) {
-    next(error);
+router.post(
+  "/:campaignId/resolve",
+  authMiddleware,
+  async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
+    try {
+      const campaign = await getCampaignDoc(req.params.campaignId);
+      if (!campaign) throw new NotFoundError("Campaign not found");
+      if (campaign.userId !== req.user!.userId) throw new ForbiddenError();
+
+      await votingService.resolveDispute(req.params.campaignId);
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
 router.get("/:campaignId/zk-config", async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
   try {
@@ -50,6 +60,23 @@ router.post("/:campaignId/zk-inputs", async (req: Request<{ campaignId: string }
     if (!identityHash) throw new BadRequestError("identityHash required");
     const inputs = await votingService.getZkInputs(req.params.campaignId, identityHash);
     res.json({ success: true, ...inputs });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/:campaignId/zk-prove", async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
+  try {
+    const { identityHash, ciphertext } = req.body;
+    if (!identityHash || !ciphertext) {
+      throw new BadRequestError("identityHash and ciphertext required");
+    }
+    const result = await votingService.proveZkVote({
+      campaignId: req.params.campaignId,
+      identityHash,
+      ciphertext,
+    });
+    res.json({ success: true, ...result });
   } catch (error) {
     next(error);
   }

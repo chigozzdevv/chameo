@@ -42,6 +42,12 @@ export const env = {
     apiKey: process.env.RESEND_API_KEY || "",
     from: process.env.RESEND_FROM || "Chameo <onboarding@resend.dev>",
   },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
+    apiKey: process.env.CLOUDINARY_API_KEY || "",
+    apiSecret: process.env.CLOUDINARY_API_SECRET || "",
+    folder: process.env.CLOUDINARY_FOLDER || "chameo/campaigns",
+  },
   range: {
     apiKey: process.env.RANGE_API_KEY || "",
   },
@@ -68,6 +74,14 @@ export const env = {
   logging: {
     level: process.env.LOG_LEVEL || "info",
   },
+  voting: {
+    disputeWindowSeconds: parseInt(process.env.DISPUTE_WINDOW_SECONDS || "172800", 10),
+    schedulerIntervalMs: parseInt(process.env.DISPUTE_SCHEDULER_INTERVAL_MS || "60000", 10),
+  },
+  funding: {
+    sweepIntervalMs: parseInt(process.env.FUNDING_SWEEP_INTERVAL_MS || "10000", 10),
+    sweepCooldownMs: parseInt(process.env.FUNDING_SWEEP_COOLDOWN_MS || "60000", 10),
+  },
   cors: {
     origin: process.env.CORS_ORIGIN || "*",
     credentials: process.env.CORS_CREDENTIALS === "true",
@@ -75,7 +89,6 @@ export const env = {
 };
 
 export function validateEnv(): void {
-  if (!env.range.apiKey) throw new Error("RANGE_API_KEY required");
   if (env.nodeEnv === "production") {
     if (env.identity.salt === "chameo-dev-salt") throw new Error("IDENTITY_SALT required in production");
     if (env.jwt.secret === "chameo-dev-secret") throw new Error("JWT_SECRET required in production");

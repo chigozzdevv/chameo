@@ -5,7 +5,7 @@ import { encryptValue } from "@inco/solana-sdk/encryption";
 import { decrypt } from "@inco/solana-sdk/attested-decrypt";
 import nacl from "tweetnacl";
 
-const PROGRAM_ID = new PublicKey("GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU");
+const PROGRAM_ID = new PublicKey(env.inco.programId || "GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU");
 const INCO_LIGHTNING_ID = new PublicKey("5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj");
 
 let _program: Program | null = null;
@@ -19,6 +19,10 @@ function getServerKeypair(): Keypair {
     _serverKeypair = Keypair.fromSecretKey(Buffer.from(env.inco.serverPrivateKey, "base64"));
   }
   return _serverKeypair;
+}
+
+export function getServerPublicKey(): PublicKey {
+  return getServerKeypair().publicKey;
 }
 
 async function getProgram(): Promise<Program> {
@@ -172,7 +176,7 @@ export async function castVoteZk(params: {
   return tx;
 }
 
-export async function closeVoting(campaignId: string): Promise<string> {
+export async function closeVoting(campaignId: string, allowedAddress: PublicKey): Promise<string> {
   const program = await getProgram();
   const keypair = getServerKeypair();
   const campaignIdBytes = getCampaignIdBytes(campaignId);
@@ -181,14 +185,15 @@ export async function closeVoting(campaignId: string): Promise<string> {
   const state = await getVotingPoolState(campaignId);
   if (!state) throw new Error("Voting pool not found");
 
-  const [allowanceRefund] = findAllowancePda(state.refundHostVotesHandle, keypair.publicKey);
-  const [allowanceEqual] = findAllowancePda(state.equalDistributionVotesHandle, keypair.publicKey);
+  const [allowanceRefund] = findAllowancePda(state.refundHostVotesHandle, allowedAddress);
+  const [allowanceEqual] = findAllowancePda(state.equalDistributionVotesHandle, allowedAddress);
 
   const tx = await (program.methods as any)
-    .closeVoting(campaignIdBytes)
+    .closeVoting(campaignIdBytes, allowedAddress)
     .accounts({
       votingPool,
       authority: keypair.publicKey,
+      allowedAddress,
       allowanceRefund,
       allowanceEqual,
       incoLightningProgram: INCO_LIGHTNING_ID,
@@ -273,6 +278,21 @@ export async function grantAnalyticsAccess(
     .rpc();
 
   return { signature: tx, handles: state };
+}
+
+export async function getAnalyticsHandles(campaignId: string): Promise<{
+  pageViewsHandle: string;
+  linkClicksHandle: string;
+  claimStartsHandle: string;
+} | null> {
+  const state = await getAnalyticsState(campaignId);
+  if (!state) return null;
+
+  return {
+    pageViewsHandle: state.pageViewsHandle.toString(),
+    linkClicksHandle: state.linkClicksHandle.toString(),
+    claimStartsHandle: state.claimStartsHandle.toString(),
+  };
 }
 
 export async function getAnalyticsState(campaignId: string): Promise<{

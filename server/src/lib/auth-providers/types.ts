@@ -5,6 +5,16 @@ export interface SocialVerificationResult {
 }
 
 export interface AuthProvider {
-  getAuthUrl(campaignId: string, redirectUri: string): string;
-  verify(code: string, authData?: Record<string, string>): Promise<SocialVerificationResult>;
+  getAuthUrl(params: {
+    campaignId: string;
+    redirectUri: string;
+    state: string;
+    codeChallenge?: string;
+  }): string;
+  verify(params: {
+    code?: string;
+    redirectUri?: string;
+    codeVerifier?: string;
+    authData?: Record<string, string>;
+  }): Promise<SocialVerificationResult>;
 }

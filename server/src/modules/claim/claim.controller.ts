@@ -1,11 +1,29 @@
+import crypto from "crypto";
 import { Router, Request } from "express";
-import { isValidEmail, isValidPublicKey, hashIdentity, generateToken, BadRequestError, rateLimit } from "@/shared";
+import { isValidEmail, isValidPublicKey, hashIdentity, BadRequestError, rateLimit } from "@/shared";
 import { authProviders } from "@/lib/auth-providers";
-import { verificationTokensCollection } from "./claim.model";
-import { verifyMagicLink, validateVerificationToken } from "./verification.service";
+import { verifyMagicLink, validateVerificationToken, createOAuthState, consumeOAuthState, createVerificationToken } from "./verification.service";
 import { processClaim, getClaimStatus } from "./claim.service";
+import { trackEvent } from "@/modules/analytics";
 
 const router = Router();
+
+function base64UrlEncode(input: Buffer): string {
+  return input
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function generateCodeVerifier(): string {
+  return base64UrlEncode(crypto.randomBytes(32));
+}
+
+function createCodeChallenge(verifier: string): string {
+  const digest = crypto.createHash("sha256").update(verifier).digest();
+  return base64UrlEncode(digest);
+}
 
 router.post("/verify/magic-link", async (req, res, next) => {
   try {
@@ -14,6 +32,14 @@ router.post("/verify/magic-link", async (req, res, next) => {
 
     const result = await verifyMagicLink(token);
     if (!result.valid) throw new BadRequestError(result.error!);
+
+    if (result.campaignId) {
+      await trackEvent({
+        campaignId: result.campaignId,
+        eventType: "link-click",
+        identityHash: result.identityHash,
+      });
+    }
 
     res.json({ success: true, token: result.token, identityHash: result.identityHash, campaignId: result.campaignId });
   } catch (error) {
@@ -32,7 +58,20 @@ router.get("/verify/social/:provider/url", async (req, res, next) => {
     if (!handler) throw new BadRequestError("Invalid provider");
     if (!campaignId || !redirectUri) throw new BadRequestError("campaignId and redirectUri required");
 
-    const url = handler.getAuthUrl(campaignId as string, redirectUri as string);
+    const codeVerifier = provider === "twitter" ? generateCodeVerifier() : undefined;
+    const state = await createOAuthState({
+      provider,
+      campaignId: String(campaignId),
+      redirectUri: String(redirectUri),
+      codeVerifier,
+    });
+    const codeChallenge = codeVerifier ? createCodeChallenge(codeVerifier) : undefined;
+    const url = handler.getAuthUrl({
+      campaignId: String(campaignId),
+      redirectUri: String(redirectUri),
+      state,
+      codeChallenge,
+    });
     res.json({ success: true, url });
   } catch (error) {
     next(error);
@@ -42,26 +81,28 @@ router.get("/verify/social/:provider/url", async (req, res, next) => {
 router.post("/verify/social/:provider/callback", async (req, res, next) => {
   try {
     const { provider } = req.params;
-    const { code, state: campaignId } = req.body;
+    const { code, state, authData } = req.body;
 
     if (["email", "phone"].includes(provider)) throw new BadRequestError("Use OTP for email/phone");
 
     const handler = authProviders[provider];
     if (!handler) throw new BadRequestError("Invalid provider");
-    if (!code || !campaignId) throw new BadRequestError("code and campaignId required");
+    if (!state) throw new BadRequestError("state required");
+    if (provider !== "telegram" && !code) throw new BadRequestError("code required");
 
-    const result = await handler.verify(code);
+    const oauthState = await consumeOAuthState(state, provider);
+    const result = await handler.verify({
+      code,
+      redirectUri: oauthState.redirectUri,
+      codeVerifier: oauthState.codeVerifier,
+      authData,
+    });
     if (!result.valid) throw new BadRequestError(result.error!);
 
     const identityHash = hashIdentity(provider, result.identifier!).toString("hex");
-    const token = generateToken();
+    const token = await createVerificationToken(identityHash, oauthState.campaignId);
 
-    await verificationTokensCollection().insertOne({
-      token,
-      identityHash,
-      campaignId,
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-    });
+    await trackEvent({ campaignId: oauthState.campaignId, eventType: "link-click", identityHash });
 
     res.json({ success: true, token, identityHash });
   } catch (error) {

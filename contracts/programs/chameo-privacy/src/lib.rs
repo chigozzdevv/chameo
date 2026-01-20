@@ -24,14 +24,6 @@ pub mod chameo_privacy {
         voting::initialize_voting_pool(ctx, campaign_id, eligibility_root, zk_verifier_program)
     }
 
-    pub fn cast_vote<'info>(
-        ctx: Context<'_, '_, '_, 'info, CastVote<'info>>,
-        campaign_id: [u8; 32],
-        encrypted_vote: Vec<u8>,
-    ) -> Result<()> {
-        voting::cast_vote(ctx, campaign_id, encrypted_vote)
-    }
-
     pub fn cast_vote_zk<'info>(
         ctx: Context<'_, '_, '_, 'info, CastVoteZk<'info>>,
         campaign_id: [u8; 32],
@@ -46,8 +38,9 @@ pub mod chameo_privacy {
     pub fn close_voting<'info>(
         ctx: Context<'_, '_, '_, 'info, CloseVoting<'info>>,
         campaign_id: [u8; 32],
+        allowed_address: Pubkey,
     ) -> Result<()> {
-        voting::close_voting(ctx, campaign_id)
+        voting::close_voting(ctx, campaign_id, allowed_address)
     }
 
     pub fn set_eligibility_root<'info>(
@@ -105,6 +98,8 @@ pub enum ErrorCode {
     NullifierMismatch,
     #[msg("Commitment mismatch")]
     CommitmentMismatch,
+    #[msg("Invalid allowed address")]
+    InvalidAllowedAddress,
     #[msg("Invalid poseidon input")]
     InvalidPoseidonInput,
 }

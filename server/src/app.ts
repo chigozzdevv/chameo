@@ -13,9 +13,19 @@ export function createApp() {
   const app = express();
 
   app.use(helmet());
+  const corsOrigins =
+    env.cors.origin === "*"
+      ? "*"
+      : env.cors.origin.split(",").map((origin) => origin.trim());
   app.use(
     cors({
-      origin: env.cors.origin === "*" ? true : env.cors.origin.split(","),
+      origin: (origin, callback) => {
+        if (!origin || corsOrigins === "*") {
+          callback(null, true);
+          return;
+        }
+        callback(null, corsOrigins.includes(origin));
+      },
       credentials: env.cors.credentials,
     })
   );

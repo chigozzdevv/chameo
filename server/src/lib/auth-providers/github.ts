@@ -2,18 +2,27 @@ import { env } from "@/config";
 import type { AuthProvider, SocialVerificationResult } from "./types";
 
 export const githubProvider: AuthProvider = {
-  getAuthUrl(campaignId: string, redirectUri: string): string {
+  getAuthUrl({ redirectUri, state }: { campaignId: string; redirectUri: string; state: string }): string {
+    if (!env.oauth.github.clientId || !env.oauth.github.clientSecret) {
+      throw new Error("GitHub OAuth not configured");
+    }
     const params = new URLSearchParams({
       client_id: env.oauth.github.clientId,
       redirect_uri: redirectUri,
       scope: "read:user",
-      state: campaignId,
+      state,
     });
     return `https://github.com/login/oauth/authorize?${params}`;
   },
 
-  async verify(code: string): Promise<SocialVerificationResult> {
+  async verify({ code }: { code?: string }): Promise<SocialVerificationResult> {
     try {
+      if (!code) {
+        return { valid: false, error: "Missing authorization code" };
+      }
+      if (!env.oauth.github.clientId || !env.oauth.github.clientSecret) {
+        return { valid: false, error: "GitHub OAuth not configured" };
+      }
       const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json" },

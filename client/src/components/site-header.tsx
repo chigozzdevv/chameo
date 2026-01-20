@@ -10,6 +10,7 @@ export default function SiteHeader() {
           fill
           priority
           className="object-cover object-center drop-shadow-sm"
+          sizes="192px"
         />
       </div>
     </header>

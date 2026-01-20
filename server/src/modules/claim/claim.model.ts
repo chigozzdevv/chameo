@@ -34,6 +34,16 @@ export interface VerificationTokenDoc {
   expiresAt: Date;
 }
 
+export interface OAuthStateDoc {
+  state: string;
+  provider: string;
+  campaignId: string;
+  redirectUri: string;
+  codeVerifier?: string;
+  createdAt: number;
+  expiresAt: Date;
+}
+
 export function claimsCollection(): Collection<ClaimDoc> {
   return getDb().collection<ClaimDoc>("claims");
 }
@@ -50,6 +60,10 @@ export function verificationTokensCollection(): Collection<VerificationTokenDoc>
   return getDb().collection<VerificationTokenDoc>("verificationTokens");
 }
 
+export function oauthStatesCollection(): Collection<OAuthStateDoc> {
+  return getDb().collection<OAuthStateDoc>("oauthStates");
+}
+
 export async function createClaimIndexes(): Promise<void> {
   await claimsCollection().createIndex({ campaignId: 1, identityHash: 1 }, { unique: true });
   await otpsCollection().createIndex({ key: 1 }, { unique: true });
@@ -58,4 +72,6 @@ export async function createClaimIndexes(): Promise<void> {
   await magicLinksCollection().createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await verificationTokensCollection().createIndex({ token: 1 }, { unique: true });
   await verificationTokensCollection().createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await oauthStatesCollection().createIndex({ state: 1, provider: 1 }, { unique: true });
+  await oauthStatesCollection().createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 }

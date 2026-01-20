@@ -1,7 +1,7 @@
-import { BadRequestError, NotFoundError } from "@/shared";
-import { getCampaignDoc, campaignsCollection, type CampaignDoc } from "@/modules/campaign";
+import { BadRequestError, NotFoundError, logger } from "@/shared";
+import { getCampaignDoc, campaignsCollection, type CampaignDoc, getCampaignPrivateBalance, withdrawFromCampaign } from "@/modules/campaign";
 import * as inco from "@/lib/inco";
-import { buildMerkleRoot, getMerkleProof } from "@/lib/zk";
+import { buildMerkleRoot, getMerkleProof, buildVoteProof } from "@/lib/zk";
 import { env } from "@/config";
 import { PublicKey } from "@solana/web3.js";
 
@@ -24,6 +24,73 @@ async function ensureEligibilityRoot(campaign: CampaignDoc): Promise<Buffer> {
   return root;
 }
 
+function resolveOutcome(refundHost: number, equalDistribution: number): "refund-host" | "equal-distribution" | "tie" {
+  if (refundHost > equalDistribution) return "refund-host";
+  if (equalDistribution > refundHost) return "equal-distribution";
+  return "tie";
+}
+
+async function resolveDisputeInternal(
+  campaignId: string,
+  allowedAddress: PublicKey,
+  options?: { force?: boolean }
+): Promise<void> {
+  const campaign = await getCampaignDoc(campaignId);
+  if (!campaign) throw new NotFoundError("Campaign not found");
+  if (campaign.status !== "dispute") throw new BadRequestError("Not in dispute");
+
+  const state = await inco.getVotingPoolState(campaignId);
+  if (!state) throw new BadRequestError("Voting pool not found");
+
+  if (!options?.force && state.totalVotes < campaign.eligibleHashes.length * 0.5) {
+    throw new BadRequestError("Insufficient votes");
+  }
+
+  try {
+    await inco.closeVoting(campaignId, allowedAddress);
+  } catch (error: any) {
+    if (!String(error?.message || error).includes("VotingNotActive")) {
+      throw error;
+    }
+  }
+
+  const totals = await inco.decryptVoteTotals(campaignId);
+  if (!totals) throw new BadRequestError("Unable to decrypt vote totals");
+
+  const outcome = resolveOutcome(totals.refundHost, totals.equalDistribution);
+  const resolvedAt = Date.now();
+  const update: Partial<CampaignDoc> = {
+    status: outcome === "equal-distribution" ? "winners-announced" : "closed",
+    votingClosedAt: resolvedAt,
+    disputeOutcome: outcome,
+    voteResults: {
+      refundHost: totals.refundHost,
+      equalDistribution: totals.equalDistribution,
+      total: state.totalVotes,
+      resolvedAt,
+    },
+  };
+
+  if (outcome === "equal-distribution") {
+    update.selectedWinners = campaign.eligibleHashes;
+  }
+
+  if ((outcome === "refund-host" || outcome === "tie") && campaign.refundAddress) {
+    try {
+      const balance = await getCampaignPrivateBalance(campaignId);
+      if (balance > 0) {
+        await withdrawFromCampaign(campaignId, balance, campaign.refundAddress);
+        update.fundedAmount = 0;
+        update.funded = false;
+      }
+    } catch (error) {
+      logger.error("Failed to refund host after dispute", { campaignId, error: String(error) });
+    }
+  }
+
+  await campaignsCollection().updateOne({ id: campaignId }, { $set: update });
+}
+
 export async function getVoteResults(campaignId: string): Promise<{
   refundHost: number | null;
   equalDistribution: number | null;
@@ -44,21 +111,7 @@ export async function getVoteResults(campaignId: string): Promise<{
   if (!state) {
     return { refundHost: null, equalDistribution: null, total: 0, revealed: false };
   }
-  if (state.isActive) {
-    return { refundHost: null, equalDistribution: null, total: state.totalVotes, revealed: false };
-  }
-
-  const decrypted = await inco.decryptVoteTotals(campaignId);
-  if (!decrypted) {
-    return { refundHost: null, equalDistribution: null, total: state.totalVotes, revealed: false };
-  }
-
-  return {
-    refundHost: decrypted.refundHost,
-    equalDistribution: decrypted.equalDistribution,
-    total: state.totalVotes,
-    revealed: true,
-  };
+  return { refundHost: null, equalDistribution: null, total: state.totalVotes, revealed: false };
 }
 
 export async function initializeVotingForCampaign(campaignId: string): Promise<void> {
@@ -77,57 +130,17 @@ export async function initializeVotingForCampaign(campaignId: string): Promise<v
   }
 }
 
-export async function resolveDispute(campaignId: string): Promise<void> {
-  const campaign = await getCampaignDoc(campaignId);
-  if (!campaign) throw new NotFoundError("Campaign not found");
-  if (campaign.status !== "dispute") throw new BadRequestError("Not in dispute");
-
-  const state = await inco.getVotingPoolState(campaignId);
-  if (!state) throw new BadRequestError("Voting pool not found");
-
-  if (state.totalVotes < campaign.eligibleHashes.length * 0.5) {
-    throw new BadRequestError("Insufficient votes");
-  }
-
-  await inco.closeVoting(campaignId);
-  const totals = await inco.decryptVoteTotals(campaignId);
-  if (!totals) throw new BadRequestError("Unable to decrypt vote totals");
-
-  await campaignsCollection().updateOne(
-    { id: campaignId },
-    {
-      $set: {
-        status: "closed",
-        votingClosedAt: Date.now(),
-        disputeOutcome:
-          totals.refundHost === totals.equalDistribution
-            ? "tie"
-            : totals.refundHost > totals.equalDistribution
-              ? "refund-host"
-              : "equal-distribution",
-        voteResults: {
-          refundHost: totals.refundHost,
-          equalDistribution: totals.equalDistribution,
-          total: state.totalVotes,
-          resolvedAt: Date.now(),
-        },
-      },
-    }
-  );
+export async function resolveDispute(campaignId: string, _creatorPubkey?: string): Promise<void> {
+  const allowedAddress = inco.getServerPublicKey();
+  await resolveDisputeInternal(campaignId, allowedAddress);
 }
 
-export async function checkDisputeTimeout(campaignId: string): Promise<void> {
-  const campaign = await getCampaignDoc(campaignId);
-  if (!campaign) return;
-  if (campaign.status !== "active") return;
-  if (campaign.type !== "escrow") return;
-  if (!campaign.winnersDeadline) return;
-
-  const now = Date.now() / 1000;
-  if (now > campaign.winnersDeadline && (!campaign.selectedWinners || campaign.selectedWinners.length === 0)) {
-    await initializeVotingForCampaign(campaignId);
-    await campaignsCollection().updateOne({ id: campaignId }, { $set: { status: "dispute" } });
-  }
+export async function resolveDisputeAsServer(
+  campaignId: string,
+  options?: { force?: boolean }
+): Promise<void> {
+  const allowedAddress = inco.getServerPublicKey();
+  await resolveDisputeInternal(campaignId, allowedAddress, options);
 }
 
 export async function getVotingInfo(campaignId: string): Promise<{
@@ -242,4 +255,32 @@ export async function castZkVote(params: {
   });
 
   return { signature };
+}
+
+export async function proveZkVote(params: {
+  campaignId: string;
+  identityHash: string;
+  ciphertext: string;
+}): Promise<{ proof: string; publicWitness: string; nullifier: string }> {
+  const { campaignId, identityHash, ciphertext } = params;
+  const campaign = await getCampaignDoc(campaignId);
+  if (!campaign) throw new NotFoundError("Campaign not found");
+  if (campaign.status !== "dispute") throw new BadRequestError("Campaign not in dispute");
+
+  const identityBuf = decodeHex(identityHash, "identityHash");
+  if (identityBuf.length !== 32) {
+    throw new BadRequestError("identityHash must be 32 bytes");
+  }
+
+  const ciphertextBuf = decodeHex(ciphertext, "ciphertext");
+  if (ciphertextBuf.length !== env.zk.ciphertextLength) {
+    throw new BadRequestError("Invalid ciphertext length");
+  }
+
+  return buildVoteProof({
+    leafHexes: campaign.eligibleHashes,
+    identityHash,
+    ciphertextHex: ciphertext,
+    merkleDepth: env.zk.merkleDepth,
+  });
 }
