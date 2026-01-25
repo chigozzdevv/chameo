@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   createCampaign,
+  checkFunding,
   listCampaigns,
   uploadCampaignImage,
   type CampaignSummary,
   type CampaignTheme,
+  type FundingStatus,
 } from "@/lib/campaign";
 
 const filters = ["All", "Payout", "Escrow"];
@@ -26,7 +28,7 @@ export default function CampaignsPage() {
   const [filter, setFilter] = useState("All");
   const [status, setStatus] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -43,6 +45,15 @@ export default function CampaignsPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [createdCampaign, setCreatedCampaign] = useState<{
+    id: string;
+    fundingAddress: string;
+    totalRequired: number;
+  } | null>(null);
+  const [funding, setFunding] = useState<FundingStatus | null>(null);
+  const [fundingLoading, setFundingLoading] = useState(false);
+  const [copiedFunding, setCopiedFunding] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -67,6 +78,8 @@ export default function CampaignsPage() {
     setShowCreate(true);
     setStep(1);
     setStatus(null);
+    setCreatedCampaign(null);
+    setFunding(null);
   }, [searchParams]);
 
   useEffect(() => {
@@ -101,6 +114,11 @@ export default function CampaignsPage() {
   };
 
   const recipientsList = useMemo(() => parseRecipients(), [form.recipients]);
+  const formatSol = (lamports: number) => (lamports / 1e9).toFixed(2);
+  const campaignLink = useMemo(() => {
+    if (!createdCampaign || typeof window === "undefined") return "";
+    return `${window.location.origin}/claim/${createdCampaign.id}`;
+  }, [createdCampaign]);
   const authHint = useMemo(() => {
     switch (form.authMethod) {
       case "email":
@@ -191,8 +209,34 @@ export default function CampaignsPage() {
     setShowCreate(false);
     setStep(1);
     setStatus(null);
+    setCreatedCampaign(null);
+    setFunding(null);
+    setCopiedFunding(false);
+    setCopiedLink(false);
     if (searchParams.get("create") === "1") {
       router.replace("/dashboard/campaigns");
+    }
+  };
+
+  const refreshFunding = async (campaignId: string) => {
+    setFundingLoading(true);
+    try {
+      const result = await checkFunding(campaignId);
+      setFunding(result);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to refresh funding.");
+    } finally {
+      setFundingLoading(false);
+    }
+  };
+
+  const copyToClipboard = async (value: string, setCopied: (state: boolean) => void) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
     }
   };
 
@@ -238,9 +282,14 @@ export default function CampaignsPage() {
 
       const updated = await listCampaigns();
       setCampaigns(updated);
-      setStatus(`Campaign created. Funding address: ${result.fundingAddress}`);
-      setShowCreate(false);
-      setStep(1);
+      setCreatedCampaign({
+        id: result.campaignId,
+        fundingAddress: result.fundingAddress,
+        totalRequired: result.totalRequired,
+      });
+      setStatus(null);
+      setStep(3);
+      await refreshFunding(result.campaignId);
       setForm({
         name: "",
         description: "",
@@ -288,6 +337,10 @@ export default function CampaignsPage() {
               setShowCreate(true);
               setStep(1);
               setStatus(null);
+              setCreatedCampaign(null);
+              setFunding(null);
+              setCopiedFunding(false);
+              setCopiedLink(false);
             }}
             className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white"
           >
@@ -374,11 +427,20 @@ export default function CampaignsPage() {
               {[
                 { id: 1, label: "Basics" },
                 { id: 2, label: "Branding" },
+                { id: 3, label: "Funding" },
               ].map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => (item.id === 1 ? setStep(1) : handleNextStep())}
+                  onClick={() => {
+                    if (item.id === 1) {
+                      setStep(1);
+                    } else if (item.id === 2) {
+                      handleNextStep();
+                    } else if (createdCampaign) {
+                      setStep(3);
+                    }
+                  }}
                   className={`rounded-full px-4 py-1.5 text-xs font-semibold ${
                     step === item.id
                       ? "bg-slate-900 text-white"
@@ -530,7 +592,7 @@ export default function CampaignsPage() {
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-slate-400 focus:outline-none"
                 />
               </div>
-            ) : (
+            ) : step === 2 ? (
               <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-slate-200 bg-white/90 p-4">
@@ -643,6 +705,87 @@ export default function CampaignsPage() {
                   </div>
                 </div>
               </div>
+            ) : (
+              <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                <div className="space-y-4 rounded-2xl border border-slate-200 bg-white/90 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    Funding checklist
+                  </p>
+                  <div className="space-y-3 text-sm text-slate-600">
+                    <p>
+                      Send <strong>{createdCampaign ? formatSol(createdCampaign.totalRequired) : "—"} SOL</strong> to the
+                      campaign wallet below. Once funds arrive, click “Refresh funding” to move them into Privacy Cash.
+                    </p>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                        Campaign wallet
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-700">
+                        <span className="break-all">{createdCampaign?.fundingAddress}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            createdCampaign &&
+                            copyToClipboard(createdCampaign.fundingAddress, setCopiedFunding)
+                          }
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500"
+                        >
+                          {copiedFunding ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                        Claim link
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-700">
+                        <span className="break-all">{campaignLink}</span>
+                        <button
+                          type="button"
+                          onClick={() => campaignLink && copyToClipboard(campaignLink, setCopiedLink)}
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500"
+                        >
+                          {copiedLink ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white/90 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      Funding status
+                    </p>
+                    <div className="mt-4 space-y-3 text-sm text-slate-600">
+                      <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
+                        <span>On-chain wallet</span>
+                        <span>{funding ? `${formatSol(funding.onChainBalance)} SOL` : "—"}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
+                        <span>Privacy Cash balance</span>
+                        <span>{funding ? `${formatSol(funding.balance)} SOL` : "—"}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
+                        <span>Required</span>
+                        <span>{createdCampaign ? `${formatSol(createdCampaign.totalRequired)} SOL` : "—"}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
+                        <span>Status</span>
+                        <span>{funding?.funded ? "Funded" : "Waiting"}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => createdCampaign && refreshFunding(createdCampaign.id)}
+                        disabled={fundingLoading}
+                        className="w-full rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        {fundingLoading ? "Refreshing…" : "Refresh funding"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
 
             {status && (
@@ -657,7 +800,7 @@ export default function CampaignsPage() {
                 onClick={handleClose}
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600"
               >
-                Cancel
+                Close
               </button>
               {step === 1 ? (
                 <button
@@ -667,7 +810,7 @@ export default function CampaignsPage() {
                 >
                   Next step
                 </button>
-              ) : (
+              ) : step === 2 ? (
                 <>
                   <button
                     type="button"
@@ -685,6 +828,14 @@ export default function CampaignsPage() {
                     Create campaign
                   </button>
                 </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white"
+                >
+                  Done
+                </button>
               )}
             </div>
           </div>
