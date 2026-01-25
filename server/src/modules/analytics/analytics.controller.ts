@@ -19,6 +19,9 @@ router.get("/:campaignId", authMiddleware, async (req: Request<{ campaignId: str
         pageViewsHandle: "0",
         linkClicksHandle: "0",
         claimStartsHandle: "0",
+        claimSuccessesHandle: "0",
+        claimFailuresHandle: "0",
+        votesHandle: "0",
       },
     });
   } catch (error) {
@@ -56,6 +59,9 @@ router.get(
           pageViewsHandle: "0",
           linkClicksHandle: "0",
           claimStartsHandle: "0",
+          claimSuccessesHandle: "0",
+          claimFailuresHandle: "0",
+          votesHandle: "0",
         },
       });
     } catch (error) {

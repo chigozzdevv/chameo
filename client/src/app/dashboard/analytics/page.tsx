@@ -17,12 +17,18 @@ type DecryptedMetrics = {
   pageViews: number;
   linkClicks: number;
   claimStarts: number;
+  claimSuccesses: number;
+  claimFailures: number;
+  votes: number;
 };
 
 const fallbackMetrics: DecryptedMetrics = {
   pageViews: 0,
   linkClicks: 0,
   claimStarts: 0,
+  claimSuccesses: 0,
+  claimFailures: 0,
+  votes: 0,
 };
 
 export default function AnalyticsPage() {
@@ -212,6 +218,9 @@ export default function AnalyticsPage() {
             { label: "Page views", value: displayMetrics.pageViews },
             { label: "Link clicks", value: displayMetrics.linkClicks },
             { label: "Claim starts", value: displayMetrics.claimStarts },
+            { label: "Claim successes", value: displayMetrics.claimSuccesses },
+            { label: "Claim failures", value: displayMetrics.claimFailures },
+            { label: "Votes", value: displayMetrics.votes },
           ].map((metric) => (
             <div
               key={metric.label}

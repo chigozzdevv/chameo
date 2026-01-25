@@ -223,7 +223,7 @@ export async function initializeAnalytics(campaignId: string): Promise<string> {
   return tx;
 }
 
-export async function trackEventOnChain(campaignId: string, eventType: 0 | 1 | 2): Promise<string> {
+export async function trackEventOnChain(campaignId: string, eventType: 0 | 1 | 2 | 3 | 4 | 5): Promise<string> {
   const program = await getProgram();
   const keypair = getServerKeypair();
   const campaignIdBytes = getCampaignIdBytes(campaignId);
@@ -249,7 +249,14 @@ export async function grantAnalyticsAccess(
   creatorPubkey: PublicKey
 ): Promise<{
   signature: string;
-  handles: { pageViewsHandle: bigint; linkClicksHandle: bigint; claimStartsHandle: bigint };
+  handles: {
+    pageViewsHandle: bigint;
+    linkClicksHandle: bigint;
+    claimStartsHandle: bigint;
+    claimSuccessesHandle: bigint;
+    claimFailuresHandle: bigint;
+    votesHandle: bigint;
+  };
 }> {
   const program = await getProgram();
   const keypair = getServerKeypair();
@@ -262,6 +269,9 @@ export async function grantAnalyticsAccess(
   const [allowancePageViews] = findAllowancePda(state.pageViewsHandle, creatorPubkey);
   const [allowanceLinkClicks] = findAllowancePda(state.linkClicksHandle, creatorPubkey);
   const [allowanceClaimStarts] = findAllowancePda(state.claimStartsHandle, creatorPubkey);
+  const [allowanceClaimSuccesses] = findAllowancePda(state.claimSuccessesHandle, creatorPubkey);
+  const [allowanceClaimFailures] = findAllowancePda(state.claimFailuresHandle, creatorPubkey);
+  const [allowanceVotes] = findAllowancePda(state.votesHandle, creatorPubkey);
 
   const tx = await (program.methods as any)
     .grantAnalyticsAccess(campaignIdBytes, creatorPubkey)
@@ -272,6 +282,9 @@ export async function grantAnalyticsAccess(
       allowancePageViews,
       allowanceLinkClicks,
       allowanceClaimStarts,
+      allowanceClaimSuccesses,
+      allowanceClaimFailures,
+      allowanceVotes,
       incoLightningProgram: INCO_LIGHTNING_ID,
       systemProgram: SystemProgram.programId,
     })
@@ -284,6 +297,9 @@ export async function getAnalyticsHandles(campaignId: string): Promise<{
   pageViewsHandle: string;
   linkClicksHandle: string;
   claimStartsHandle: string;
+  claimSuccessesHandle: string;
+  claimFailuresHandle: string;
+  votesHandle: string;
 } | null> {
   const state = await getAnalyticsState(campaignId);
   if (!state) return null;
@@ -292,6 +308,9 @@ export async function getAnalyticsHandles(campaignId: string): Promise<{
     pageViewsHandle: state.pageViewsHandle.toString(),
     linkClicksHandle: state.linkClicksHandle.toString(),
     claimStartsHandle: state.claimStartsHandle.toString(),
+    claimSuccessesHandle: state.claimSuccessesHandle.toString(),
+    claimFailuresHandle: state.claimFailuresHandle.toString(),
+    votesHandle: state.votesHandle.toString(),
   };
 }
 
@@ -299,6 +318,9 @@ export async function getAnalyticsState(campaignId: string): Promise<{
   pageViewsHandle: bigint;
   linkClicksHandle: bigint;
   claimStartsHandle: bigint;
+  claimSuccessesHandle: bigint;
+  claimFailuresHandle: bigint;
+  votesHandle: bigint;
 } | null> {
   const program = await getProgram();
   const [analytics] = findAnalyticsPda(campaignId);
@@ -309,6 +331,9 @@ export async function getAnalyticsState(campaignId: string): Promise<{
       pageViewsHandle: parseHandle(state.pageViews),
       linkClicksHandle: parseHandle(state.linkClicks),
       claimStartsHandle: parseHandle(state.claimStarts),
+      claimSuccessesHandle: parseHandle(state.claimSuccesses),
+      claimFailuresHandle: parseHandle(state.claimFailures),
+      votesHandle: parseHandle(state.votes),
     };
   } catch {
     return null;

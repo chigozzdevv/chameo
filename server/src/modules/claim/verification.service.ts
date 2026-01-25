@@ -26,11 +26,12 @@ export async function sendClaimEmail(email: string, campaignId: string, campaign
 
 export async function createMagicLink(method: string, identifier: string, campaignId: string): Promise<string> {
   const token = generateToken();
+  const identityHash = hashIdentity(method, identifier).toString("hex");
 
   await magicLinksCollection().insertOne({
     token,
     authMethod: method,
-    identifier,
+    identityHash,
     campaignId,
     expiresAt: new Date(Date.now() + MAGIC_LINK_EXPIRY_MS),
   });
@@ -45,7 +46,10 @@ export async function verifyMagicLink(
 
   if (!doc) return { valid: false, error: "Invalid or expired link" };
 
-  const identityHash = hashIdentity(doc.authMethod, doc.identifier).toString("hex");
+  const identityHash =
+    doc.identityHash ||
+    (doc.identifier ? hashIdentity(doc.authMethod, doc.identifier).toString("hex") : null);
+  if (!identityHash) return { valid: false, error: "Invalid or expired link" };
   const verificationToken = await createVerificationToken(identityHash, doc.campaignId);
 
   return { valid: true, token: verificationToken, identityHash, campaignId: doc.campaignId };

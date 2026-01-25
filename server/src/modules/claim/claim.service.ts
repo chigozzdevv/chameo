@@ -5,7 +5,6 @@ import { claimsCollection } from "./claim.model";
 import { getCampaignDoc, isEligible, incrementClaimCount, deductFunds, getCampaignWalletKeys } from "@/modules/campaign";
 import { checkWalletCompliance, type ComplianceCheckResult } from "@/modules/compliance";
 import { validateVerificationToken, consumeVerificationToken } from "./verification.service";
-import * as inco from "@/lib/inco";
 
 export interface ClaimResult {
   signature: string;
@@ -74,6 +73,8 @@ export async function processClaim(campaignId: string, token: string, walletAddr
 
   let compliance: ComplianceCheckResult | null = null;
 
+  let failureTracked = false;
+
   try {
     // Compliance screening is mandatory for every claim.
     const complianceResult = await checkWalletCompliance(walletAddress);
@@ -82,6 +83,7 @@ export async function processClaim(campaignId: string, token: string, walletAddr
     if (!complianceResult.isCompliant) {
       await claimsCollection().deleteOne({ campaignId, identityHash });
       await trackEvent({ campaignId, eventType: "claim-failure", identityHash, metadata: { reason: "compliance" } });
+      failureTracked = true;
       throw new BadRequestError(complianceResult.blockedReason || "Wallet failed compliance check");
     }
 
@@ -104,7 +106,9 @@ export async function processClaim(campaignId: string, token: string, walletAddr
     return { signature: result.signature, amount: campaign.payoutAmount, compliance };
   } catch (error) {
     await claimsCollection().deleteOne({ campaignId, identityHash, signature: "" });
-    await trackEvent({ campaignId, eventType: "claim-failure", identityHash, metadata: { error: String(error) } });
+    if (!failureTracked) {
+      await trackEvent({ campaignId, eventType: "claim-failure", identityHash, metadata: { error: String(error) } });
+    }
     throw error;
   }
 }

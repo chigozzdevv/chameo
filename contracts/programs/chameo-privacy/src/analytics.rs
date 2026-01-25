@@ -12,10 +12,13 @@ pub struct Analytics {
     pub page_views: Euint128,
     pub link_clicks: Euint128,
     pub claim_starts: Euint128,
+    pub claim_successes: Euint128,
+    pub claim_failures: Euint128,
+    pub votes: Euint128,
 }
 
 impl Analytics {
-    pub const LEN: usize = 32 + 32 + 16 + 16 + 16;
+    pub const LEN: usize = 32 + 32 + 16 * 6;
 }
 
 #[derive(Accounts)]
@@ -76,6 +79,15 @@ pub struct GrantAnalyticsAccess<'info> {
     /// CHECK: Allowance PDA for claim_starts
     #[account(mut)]
     pub allowance_claim_starts: AccountInfo<'info>,
+    /// CHECK: Allowance PDA for claim_successes
+    #[account(mut)]
+    pub allowance_claim_successes: AccountInfo<'info>,
+    /// CHECK: Allowance PDA for claim_failures
+    #[account(mut)]
+    pub allowance_claim_failures: AccountInfo<'info>,
+    /// CHECK: Allowance PDA for votes
+    #[account(mut)]
+    pub allowance_votes: AccountInfo<'info>,
     /// CHECK: Inco Lightning program
     #[account(address = INCO_LIGHTNING_ID)]
     pub inco_lightning_program: AccountInfo<'info>,
@@ -99,8 +111,17 @@ pub fn initialize_analytics<'info>(
     let cpi_ctx = CpiContext::new(inco.clone(), Operation { signer: signer.clone() });
     analytics.link_clicks = as_euint128(cpi_ctx, 0)?;
     
-    let cpi_ctx = CpiContext::new(inco, Operation { signer });
+    let cpi_ctx = CpiContext::new(inco.clone(), Operation { signer: signer.clone() });
     analytics.claim_starts = as_euint128(cpi_ctx, 0)?;
+
+    let cpi_ctx = CpiContext::new(inco.clone(), Operation { signer: signer.clone() });
+    analytics.claim_successes = as_euint128(cpi_ctx, 0)?;
+
+    let cpi_ctx = CpiContext::new(inco.clone(), Operation { signer: signer.clone() });
+    analytics.claim_failures = as_euint128(cpi_ctx, 0)?;
+
+    let cpi_ctx = CpiContext::new(inco, Operation { signer });
+    analytics.votes = as_euint128(cpi_ctx, 0)?;
     
     Ok(())
 }
@@ -130,6 +151,18 @@ pub fn track_event<'info>(
         2 => {
             let cpi_ctx = CpiContext::new(inco, Operation { signer });
             analytics.claim_starts = e_add(cpi_ctx, analytics.claim_starts, increment, 0)?;
+        }
+        3 => {
+            let cpi_ctx = CpiContext::new(inco, Operation { signer });
+            analytics.claim_successes = e_add(cpi_ctx, analytics.claim_successes, increment, 0)?;
+        }
+        4 => {
+            let cpi_ctx = CpiContext::new(inco, Operation { signer });
+            analytics.claim_failures = e_add(cpi_ctx, analytics.claim_failures, increment, 0)?;
+        }
+        5 => {
+            let cpi_ctx = CpiContext::new(inco, Operation { signer });
+            analytics.votes = e_add(cpi_ctx, analytics.votes, increment, 0)?;
         }
         _ => return Err(ErrorCode::InvalidEventType.into()),
     }
@@ -169,15 +202,48 @@ pub fn grant_analytics_access<'info>(
     allow(cpi_ctx, analytics.link_clicks.0, true, allowed_address)?;
 
     let cpi_ctx = CpiContext::new(
-        inco,
+        inco.clone(),
         Allow {
             allowance_account: ctx.accounts.allowance_claim_starts.to_account_info(),
-            signer,
+            signer: signer.clone(),
             allowed_address: ctx.accounts.allowed_address.to_account_info(),
             system_program: ctx.accounts.system_program.to_account_info(),
         },
     );
     allow(cpi_ctx, analytics.claim_starts.0, true, allowed_address)?;
+
+    let cpi_ctx = CpiContext::new(
+        inco.clone(),
+        Allow {
+            allowance_account: ctx.accounts.allowance_claim_successes.to_account_info(),
+            signer: signer.clone(),
+            allowed_address: ctx.accounts.allowed_address.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+        },
+    );
+    allow(cpi_ctx, analytics.claim_successes.0, true, allowed_address)?;
+
+    let cpi_ctx = CpiContext::new(
+        inco.clone(),
+        Allow {
+            allowance_account: ctx.accounts.allowance_claim_failures.to_account_info(),
+            signer: signer.clone(),
+            allowed_address: ctx.accounts.allowed_address.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+        },
+    );
+    allow(cpi_ctx, analytics.claim_failures.0, true, allowed_address)?;
+
+    let cpi_ctx = CpiContext::new(
+        inco,
+        Allow {
+            allowance_account: ctx.accounts.allowance_votes.to_account_info(),
+            signer,
+            allowed_address: ctx.accounts.allowed_address.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+        },
+    );
+    allow(cpi_ctx, analytics.votes.0, true, allowed_address)?;
 
     Ok(())
 }

@@ -1,5 +1,6 @@
 import { BadRequestError, NotFoundError, logger } from "@/shared";
 import { getCampaignDoc, campaignsCollection, type CampaignDoc, getCampaignPrivateBalance, withdrawFromCampaign } from "@/modules/campaign";
+import { trackEvent } from "@/modules/analytics";
 import * as inco from "@/lib/inco";
 import { buildMerkleRoot, getMerkleProof, buildVoteProof } from "@/lib/zk";
 import { env } from "@/config";
@@ -253,6 +254,8 @@ export async function castZkVote(params: {
     publicWitness: witnessBuf,
     encryptedVote: ciphertextBuf,
   });
+
+  await trackEvent({ campaignId, eventType: "vote" });
 
   return { signature };
 }

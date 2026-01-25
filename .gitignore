@@ -15,8 +15,7 @@ client/out/
 *.json.bak
 
 # Anchor / Rust build
-contracts/target/
-contracts/target/**
+contracts/target/*
 contracts/.anchor/
 contracts/.cargo/
 

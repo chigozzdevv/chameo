@@ -13,7 +13,7 @@ export async function initializeAnalyticsForCampaign(campaignId: string): Promis
 }
 
 export async function trackEvent(event: Omit<AnalyticsEvent, "timestamp">): Promise<void> {
-  let incoEventType: 0 | 1 | 2 | null = null;
+  let incoEventType: 0 | 1 | 2 | 3 | 4 | 5 | null = null;
 
   switch (event.eventType) {
     case "view":
@@ -26,10 +26,13 @@ export async function trackEvent(event: Omit<AnalyticsEvent, "timestamp">): Prom
       incoEventType = 2;
       break;
     case "claim-success":
+      incoEventType = 3;
       break;
     case "claim-failure":
+      incoEventType = 4;
       break;
     case "vote":
+      incoEventType = 5;
       break;
   }
 
@@ -64,6 +67,9 @@ export async function getAnalyticsHandles(campaignId: string): Promise<{
   pageViewsHandle: string;
   linkClicksHandle: string;
   claimStartsHandle: string;
+  claimSuccessesHandle: string;
+  claimFailuresHandle: string;
+  votesHandle: string;
 } | null> {
   return inco.getAnalyticsHandles(campaignId);
 }
@@ -73,7 +79,14 @@ export async function grantAnalyticsAccess(
   creatorPubkey: string
 ): Promise<{
   signature: string;
-  handles: { pageViews: string; linkClicks: string; claimStarts: string };
+  handles: {
+    pageViews: string;
+    linkClicks: string;
+    claimStarts: string;
+    claimSuccesses: string;
+    claimFailures: string;
+    votes: string;
+  };
 }> {
   const result = await inco.grantAnalyticsAccess(campaignId, new PublicKey(creatorPubkey));
   return {
@@ -82,6 +95,9 @@ export async function grantAnalyticsAccess(
       pageViews: result.handles.pageViewsHandle.toString(),
       linkClicks: result.handles.linkClicksHandle.toString(),
       claimStarts: result.handles.claimStartsHandle.toString(),
+      claimSuccesses: result.handles.claimSuccessesHandle.toString(),
+      claimFailures: result.handles.claimFailuresHandle.toString(),
+      votes: result.handles.votesHandle.toString(),
     },
   };
 }

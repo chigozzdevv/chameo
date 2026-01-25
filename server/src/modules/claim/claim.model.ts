@@ -22,7 +22,8 @@ export interface OtpDoc {
 export interface MagicLinkDoc {
   token: string;
   authMethod: string;
-  identifier: string;
+  identityHash: string;
+  identifier?: string;
   campaignId: string;
   expiresAt: Date;
 }
