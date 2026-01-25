@@ -90,6 +90,16 @@ export default function CampaignsPage() {
       .map((value) => value.trim())
       .filter(Boolean);
 
+  const parseLocalDateTime = (value: string) => {
+    if (!value) return null;
+    const [datePart, timePart] = value.split("T");
+    if (!datePart || !timePart) return null;
+    const [year, month, day] = datePart.split("-").map(Number);
+    const [hour, minute] = timePart.split(":").map(Number);
+    if ([year, month, day, hour, minute].some((part) => Number.isNaN(part))) return null;
+    return new Date(year, month - 1, day, hour, minute, 0);
+  };
+
   const recipientsList = useMemo(() => parseRecipients(), [form.recipients]);
   const authHint = useMemo(() => {
     switch (form.authMethod) {
@@ -143,6 +153,26 @@ export default function CampaignsPage() {
       setStatus("Expiration date is required.");
       return false;
     }
+    const expiresDate = parseLocalDateTime(form.expiresAt);
+    if (!expiresDate || Number.isNaN(expiresDate.getTime())) {
+      setStatus("Expiration date is invalid.");
+      return false;
+    }
+    if (expiresDate.getTime() <= Date.now()) {
+      setStatus("Expiration date must be in the future.");
+      return false;
+    }
+    if (form.type === "escrow" && form.winnersDeadline) {
+      const winnersDate = parseLocalDateTime(form.winnersDeadline);
+      if (!winnersDate || Number.isNaN(winnersDate.getTime())) {
+        setStatus("Winners deadline is invalid.");
+        return false;
+      }
+      if (winnersDate.getTime() >= expiresDate.getTime()) {
+        setStatus("Winners deadline must be before expiration.");
+        return false;
+      }
+    }
     const recipients = parseRecipients();
     if (!recipients.length) {
       setStatus("Add at least one recipient.");
@@ -173,10 +203,18 @@ export default function CampaignsPage() {
     setLoading(true);
     setStatus(null);
     try {
-      const expiresAt = Math.floor(new Date(form.expiresAt).getTime() / 1000);
+      const expiresDate = parseLocalDateTime(form.expiresAt);
+      if (!expiresDate) {
+        setStatus("Expiration date is invalid.");
+        return;
+      }
+      const expiresAt = Math.floor(expiresDate.getTime() / 1000);
       const winnersDeadline =
         form.type === "escrow" && form.winnersDeadline
-          ? Math.floor(new Date(form.winnersDeadline).getTime() / 1000)
+          ? (() => {
+              const winnersDate = parseLocalDateTime(form.winnersDeadline);
+              return winnersDate ? Math.floor(winnersDate.getTime() / 1000) : undefined;
+            })()
           : undefined;
 
       const result = await createCampaign({
