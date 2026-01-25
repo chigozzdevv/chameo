@@ -3,7 +3,7 @@ import { getDb } from "@/config";
 
 export type AuthMethod = "email" | "twitter" | "discord" | "github" | "telegram";
 export type CampaignType = "payout" | "escrow";
-export type CampaignStatus = "active" | "winners-announced" | "dispute" | "closed";
+export type CampaignStatus = "pending-funding" | "active" | "winners-announced" | "dispute" | "closed";
 
 export interface CampaignTheme {
   primary?: string;

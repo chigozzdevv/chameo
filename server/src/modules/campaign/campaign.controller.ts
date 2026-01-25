@@ -97,6 +97,7 @@ router.get("/:id", async (req: Request<{ id: string }>, res: Response, next: Nex
   try {
     const campaign = await campaignService.getCampaign(req.params.id);
     if (!campaign) throw new NotFoundError("Campaign not found");
+    if (!campaign.funded) throw new NotFoundError("Campaign not live yet");
 
     await trackEvent({ campaignId: req.params.id, eventType: "view" });
 

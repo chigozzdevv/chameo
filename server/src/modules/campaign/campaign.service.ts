@@ -42,7 +42,7 @@ export async function createCampaign(
     eligibilityRoot,
     theme: input.theme,
     selectedWinners: input.type === "escrow" ? [] : undefined,
-    status: "active",
+    status: "pending-funding",
     refundAddress: input.refundAddress,
     createdAt: Date.now(),
   };
@@ -106,16 +106,20 @@ export async function checkFunding(
       onChainBalance = await connection.getBalance(new PublicKey(campaignWallet));
       const funded = pcBalance >= totalRequired;
 
-      if (funded && !doc.funded) {
-        await col.updateOne({ id }, { $set: { funded: true, fundedAmount: pcBalance } });
+      if (funded && (!doc.funded || doc.status === "pending-funding")) {
+        const update: Partial<CampaignDoc> = { funded: true, fundedAmount: pcBalance };
+        if (doc.status === "pending-funding") update.status = "active";
+        await col.updateOne({ id }, { $set: update });
       }
       return { balance: pcBalance, totalRequired, funded, depositTx: signature, onChainBalance, campaignWallet };
     }
   }
 
   const funded = pcBalance >= totalRequired;
-  if (funded && !doc.funded) {
-    await col.updateOne({ id }, { $set: { funded: true, fundedAmount: pcBalance } });
+  if (funded && (!doc.funded || doc.status === "pending-funding")) {
+    const update: Partial<CampaignDoc> = { funded: true, fundedAmount: pcBalance };
+    if (doc.status === "pending-funding") update.status = "active";
+    await col.updateOne({ id }, { $set: update });
   }
 
   return { balance: pcBalance, totalRequired, funded, onChainBalance, campaignWallet };
