@@ -9,7 +9,7 @@ pub mod analytics;
 pub use voting::*;
 pub use analytics::*;
 
-declare_id!("GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU");
+declare_id!("FsoGyYnvQDu5zXHmWHiyCxi7nWMr7RYxB1zGgz8ciJVM");
 
 #[program]
 pub mod chameo_privacy {

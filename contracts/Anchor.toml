@@ -5,7 +5,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-chameo_privacy = "GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU"
+chameo_privacy = "FsoGyYnvQDu5zXHmWHiyCxi7nWMr7RYxB1zGgz8ciJVM"
 
 [programs.mainnet]
 chameo_privacy = "8YMAfR6c26sKt9wtbXKzDdSWop1sqTadTz72RFbYCDdn"
@@ -15,7 +15,7 @@ url = "https://api.apr.dev"
 
 [provider]
 cluster = "devnet"
-wallet = "/home/chigozzdev/Desktop/chameo/server/server-keypair.json"
+wallet = "../server/server-keypair.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
