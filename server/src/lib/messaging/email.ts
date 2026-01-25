@@ -3,7 +3,12 @@ import { env } from "@/config";
 
 const resend = new Resend(env.resend.apiKey);
 
-export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  options?: { from?: string }
+): Promise<boolean> {
   if (!env.resend.apiKey) {
     console.log(`[EMAIL] To: ${to} | Subject: ${subject}`);
     return true;
@@ -11,7 +16,7 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
 
   try {
     const { error } = await resend.emails.send({
-      from: env.resend.from,
+      from: options?.from || env.resend.from,
       to: [to],
       subject,
       html,

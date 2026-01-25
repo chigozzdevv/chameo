@@ -1,5 +1,6 @@
 import { BadRequestError, generateToken, hashIdentity } from "@/shared";
 import { sendEmail } from "@/lib/messaging";
+import { env } from "@/config";
 import { magicLinksCollection, oauthStatesCollection, verificationTokensCollection } from "./claim.model";
 
 const MAGIC_LINK_EXPIRY_MS = 24 * 60 * 60 * 1000;
@@ -20,7 +21,8 @@ export async function sendClaimEmail(email: string, campaignId: string, campaign
       <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:6px;">Claim Now</a></p>
       <p>Or copy this link: ${link}</p>
       <p>This link expires in 24 hours.</p>
-    `
+    `,
+    { from: env.resend.fromClaims }
   );
 }
 

@@ -41,6 +41,14 @@ export const env = {
   resend: {
     apiKey: process.env.RESEND_API_KEY || "",
     from: process.env.RESEND_FROM || "Chameo <onboarding@resend.dev>",
+    fromClaims:
+      process.env.RESEND_FROM_CLAIMS ||
+      process.env.RESEND_FROM ||
+      "Chameo <onboarding@resend.dev>",
+    fromAuth:
+      process.env.RESEND_FROM_AUTH ||
+      process.env.RESEND_FROM ||
+      "Chameo <onboarding@resend.dev>",
   },
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME || "",

@@ -65,7 +65,8 @@ export async function requestPasswordReset(email: string): Promise<void> {
   await sendEmail(
     user.email,
     "Reset Your Password",
-    `<p>Click the link below to reset your password:</p><p><a href="${env.cors.origin}/reset-password?token=${resetToken}">Reset Password</a></p><p>This link expires in 1 hour.</p>`
+    `<p>Click the link below to reset your password:</p><p><a href="${env.cors.origin}/reset-password?token=${resetToken}">Reset Password</a></p><p>This link expires in 1 hour.</p>`,
+    { from: env.resend.fromAuth }
   );
 }
 

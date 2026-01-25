@@ -1,4 +1,5 @@
 import { sendEmail } from "@/lib/messaging";
+import { env } from "@/config";
 import { createMagicLink } from "./verification.service";
 
 export async function sendBatchNotifications(
@@ -33,7 +34,10 @@ export async function sendBatchNotifications(
         <p>Or copy this link: ${link}</p>
       `;
 
-      const success = authMethod === "email" ? await sendEmail(recipient, subject, html) : false;
+      const success =
+        authMethod === "email"
+          ? await sendEmail(recipient, subject, html, { from: env.resend.fromClaims })
+          : false;
 
       if (success) sent++;
       else failed++;
