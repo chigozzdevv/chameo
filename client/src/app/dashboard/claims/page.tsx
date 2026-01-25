@@ -68,7 +68,12 @@ export default function ClaimsPage() {
                   </option>
                 ))
               ) : (
-                <option value="__create__">Create campaign</option>
+                <>
+                  <option value="" disabled>
+                    No campaigns available
+                  </option>
+                  <option value="__create__">Create campaign</option>
+                </>
               )}
             </select>
             <button

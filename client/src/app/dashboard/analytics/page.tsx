@@ -174,7 +174,12 @@ export default function AnalyticsPage() {
                   </option>
                 ))
               ) : (
-                <option value="__create__">Create campaign</option>
+                <>
+                  <option value="" disabled>
+                    No campaigns available
+                  </option>
+                  <option value="__create__">Create campaign</option>
+                </>
               )}
             </select>
             {!wallet ? (
