@@ -1,0 +1,820 @@
+{
+  "address": "GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU",
+  "metadata": {
+    "name": "chameo_privacy",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "cast_vote_zk",
+      "discriminator": [
+        59,
+        246,
+        59,
+        53,
+        12,
+        138,
+        98,
+        36
+      ],
+      "accounts": [
+        {
+          "name": "nullifier",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  117,
+                  108,
+                  108,
+                  105,
+                  102,
+                  105,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "campaign_id"
+              },
+              {
+                "kind": "arg",
+                "path": "nullifier_value"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voting_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "campaign_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "relayer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "zk_verifier_program"
+        },
+        {
+          "name": "inco_lightning_program",
+          "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "campaign_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nullifier_value",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "proof",
+          "type": "bytes"
+        },
+        {
+          "name": "public_witness",
+          "type": "bytes"
+        },
+        {
+          "name": "encrypted_vote",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "close_voting",
+      "discriminator": [
+        148,
+        200,
+        139,
+        134,
+        50,
+        55,
+        60,
+        216
+      ],
+      "accounts": [
+        {
+          "name": "voting_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "campaign_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "allowed_address"
+        },
+        {
+          "name": "allowance_refund",
+          "writable": true
+        },
+        {
+          "name": "allowance_equal",
+          "writable": true
+        },
+        {
+          "name": "inco_lightning_program",
+          "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "campaign_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "allowed_address",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "grant_analytics_access",
+      "discriminator": [
+        221,
+        74,
+        154,
+        8,
+        237,
+        191,
+        197,
+        20
+      ],
+      "accounts": [
+        {
+          "name": "analytics",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  110,
+                  97,
+                  108,
+                  121,
+                  116,
+                  105,
+                  99,
+                  115
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "campaign_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "allowed_address"
+        },
+        {
+          "name": "allowance_page_views",
+          "writable": true
+        },
+        {
+          "name": "allowance_link_clicks",
+          "writable": true
+        },
+        {
+          "name": "allowance_claim_starts",
+          "writable": true
+        },
+        {
+          "name": "inco_lightning_program",
+          "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "campaign_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "allowed_address",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "initialize_analytics",
+      "discriminator": [
+        39,
+        6,
+        0,
+        253,
+        143,
+        16,
+        81,
+        194
+      ],
+      "accounts": [
+        {
+          "name": "analytics",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  110,
+                  97,
+                  108,
+                  121,
+                  116,
+                  105,
+                  99,
+                  115
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "campaign_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "inco_lightning_program",
+          "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "campaign_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_voting_pool",
+      "discriminator": [
+        217,
+        10,
+        124,
+        68,
+        53,
+        226,
+        187,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "voting_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "campaign_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "inco_lightning_program",
+          "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "campaign_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "eligibility_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "zk_verifier_program",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_eligibility_root",
+      "discriminator": [
+        19,
+        109,
+        114,
+        36,
+        207,
+        203,
+        137,
+        33
+      ],
+      "accounts": [
+        {
+          "name": "voting_pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  105,
+                  110,
+                  103,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "campaign_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "campaign_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "eligibility_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "track_event",
+      "discriminator": [
+        26,
+        103,
+        232,
+        218,
+        109,
+        33,
+        227,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "analytics",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  110,
+                  97,
+                  108,
+                  121,
+                  116,
+                  105,
+                  99,
+                  115
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "campaign_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "inco_lightning_program",
+          "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
+        }
+      ],
+      "args": [
+        {
+          "name": "campaign_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "encrypted_increment",
+          "type": "bytes"
+        },
+        {
+          "name": "event_type",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Analytics",
+      "discriminator": [
+        135,
+        28,
+        189,
+        27,
+        51,
+        143,
+        253,
+        88
+      ]
+    },
+    {
+      "name": "Nullifier",
+      "discriminator": [
+        18,
+        56,
+        142,
+        165,
+        181,
+        158,
+        187,
+        133
+      ]
+    },
+    {
+      "name": "VotingPool",
+      "discriminator": [
+        89,
+        90,
+        181,
+        87,
+        76,
+        21,
+        248,
+        159
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Unauthorized"
+    },
+    {
+      "code": 6001,
+      "name": "VotingNotActive",
+      "msg": "Voting not active"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidEventType",
+      "msg": "Invalid event type"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidZkVerifier",
+      "msg": "Invalid ZK verifier program"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidProofLength",
+      "msg": "Invalid ZK proof length"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidPublicWitnessLength",
+      "msg": "Invalid ZK public witness length"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidCiphertextLength",
+      "msg": "Invalid ciphertext length"
+    },
+    {
+      "code": 6007,
+      "name": "MerkleRootMismatch",
+      "msg": "Merkle root mismatch"
+    },
+    {
+      "code": 6008,
+      "name": "NullifierMismatch",
+      "msg": "Nullifier mismatch"
+    },
+    {
+      "code": 6009,
+      "name": "CommitmentMismatch",
+      "msg": "Commitment mismatch"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidAllowedAddress",
+      "msg": "Invalid allowed address"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidPoseidonInput",
+      "msg": "Invalid poseidon input"
+    }
+  ],
+  "types": [
+    {
+      "name": "Analytics",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "campaign_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "page_views",
+            "type": {
+              "defined": {
+                "name": "Euint128"
+              }
+            }
+          },
+          {
+            "name": "link_clicks",
+            "type": {
+              "defined": {
+                "name": "Euint128"
+              }
+            }
+          },
+          {
+            "name": "claim_starts",
+            "type": {
+              "defined": {
+                "name": "Euint128"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Euint128",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          "u128"
+        ]
+      }
+    },
+    {
+      "name": "Nullifier",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "campaign_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "value",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "VotingPool",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "campaign_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "eligibility_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "zk_verifier_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "refund_host_votes",
+            "type": {
+              "defined": {
+                "name": "Euint128"
+              }
+            }
+          },
+          {
+            "name": "equal_distribution_votes",
+            "type": {
+              "defined": {
+                "name": "Euint128"
+              }
+            }
+          },
+          {
+            "name": "total_votes",
+            "type": "u64"
+          },
+          {
+            "name": "is_active",
+            "type": "bool"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -135,7 +135,7 @@ export default function DashboardPage() {
           ].map((stat) => (
             <div
               key={stat.label}
-              className="rounded-[1.75rem] border border-white/70 bg-white/80 p-5 shadow-[0_20px_45px_rgba(15,23,42,0.1)] backdrop-blur"
+              className="rounded-2xl border border-slate-200 bg-white p-5"
             >
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
                 {stat.label}
