@@ -11,14 +11,7 @@ import {
   type CampaignTheme,
   type FundingStatus,
 } from "@/lib/campaign";
-import {
-  initPrivacyCashContext,
-  getPrivacyCashBalance,
-  depositToPrivacyCash,
-  withdrawToAddress,
-  type WalletProvider,
-  type PrivacyCashContext,
-} from "@/lib/privacy-cash";
+import type { PrivacyCashContext, WalletProvider } from "@/lib/privacy-cash";
 
 const filters = ["All", "Payout", "Escrow"];
 
@@ -26,6 +19,17 @@ const themeDefaults: CampaignTheme = {
   primary: "#0f172a",
   secondary: "#94a3b8",
   background: "#f8fafc",
+};
+
+type PrivacyCashModule = typeof import("@/lib/privacy-cash");
+
+let privacyCashModulePromise: Promise<PrivacyCashModule> | null = null;
+
+const loadPrivacyCashModule = () => {
+  if (!privacyCashModulePromise) {
+    privacyCashModulePromise = import("@/lib/privacy-cash");
+  }
+  return privacyCashModulePromise;
 };
 
 export default function CampaignsPage() {
@@ -359,6 +363,7 @@ export default function CampaignsPage() {
         signTransaction: provider.signTransaction.bind(provider),
       };
       setWallet(adapter);
+      const { initPrivacyCashContext, getPrivacyCashBalance } = await loadPrivacyCashModule();
       const context = await initPrivacyCashContext(
         adapter,
         process.env.NEXT_PUBLIC_SOLANA_RPC_URL
@@ -379,6 +384,7 @@ export default function CampaignsPage() {
     setPcLoading(true);
     setPcStatus(null);
     try {
+      const { getPrivacyCashBalance } = await loadPrivacyCashModule();
       const balance = await getPrivacyCashBalance(pcContext, wallet);
       setPcBalance(balance);
     } catch (error) {
@@ -393,6 +399,7 @@ export default function CampaignsPage() {
     setDepositLoading(true);
     setPcStatus(null);
     try {
+      const { depositToPrivacyCash, getPrivacyCashBalance } = await loadPrivacyCashModule();
       const tx = await depositToPrivacyCash(pcContext, wallet, createdCampaign.totalRequired);
       setPcStatus(`Deposit submitted: ${tx}`);
       const balance = await getPrivacyCashBalance(pcContext, wallet);
@@ -409,6 +416,7 @@ export default function CampaignsPage() {
     setWithdrawLoading(true);
     setPcStatus(null);
     try {
+      const { withdrawToAddress, getPrivacyCashBalance } = await loadPrivacyCashModule();
       const result = await withdrawToAddress(
         pcContext,
         wallet,
