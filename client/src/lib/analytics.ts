@@ -18,7 +18,7 @@ export type AnalyticsHandles = {
 export async function decryptAnalytics(
   handles: AnalyticsHandles,
   wallet: WalletAdapter
-: Promise<{
+): Promise<{
   pageViews: number;
   linkClicks: number;
   claimStarts: number;
