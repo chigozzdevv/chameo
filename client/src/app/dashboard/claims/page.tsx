@@ -25,7 +25,7 @@ export default function ClaimsPage() {
         if (items.length) {
           setActiveCampaignId(items[0].id);
         } else {
-          setActiveCampaignId("__create__");
+          setActiveCampaignId("");
         }
       })
       .catch(() => setCampaigns([]))
@@ -58,17 +58,15 @@ export default function ClaimsPage() {
               onChange={(event) => handleCampaignChange(event.target.value)}
               className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 focus:outline-none"
             >
+              <option value="" disabled>
+                Choose campaign
+              </option>
               {campaigns.length ? (
-                <>
-                  <option value="" disabled>
-                    Choose campaign
+                campaigns.map((campaign) => (
+                  <option key={campaign.id} value={campaign.id}>
+                    {campaign.name}
                   </option>
-                  {campaigns.map((campaign) => (
-                    <option key={campaign.id} value={campaign.id}>
-                      {campaign.name}
-                    </option>
-                  ))}
-                </>
+                ))
               ) : (
                 <option value="__create__">Create campaign</option>
               )}

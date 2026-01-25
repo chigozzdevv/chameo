@@ -32,7 +32,7 @@ export default function DashboardPage() {
         if (items?.length) {
           setActiveCampaignId(items[0].id);
         } else {
-          setActiveCampaignId("__create__");
+          setActiveCampaignId("");
         }
       })
       .catch(() => {
@@ -94,7 +94,7 @@ export default function DashboardPage() {
   }, [campaigns]);
 
   const handleAnalyticsClick = () => {
-    if (!activeCampaignId || activeCampaignId === "__create__") {
+    if (!activeCampaignId) {
       router.push("/dashboard/campaigns");
       return;
     }
