@@ -1,7 +1,7 @@
-import webpack from "webpack";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+const webpack = require("next/dist/compiled/webpack/webpack-lib.js");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
