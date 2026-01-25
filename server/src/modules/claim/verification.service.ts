@@ -1,5 +1,6 @@
 import { BadRequestError, generateToken, hashIdentity } from "@/shared";
 import { sendEmail } from "@/lib/messaging";
+import { getFrontendUrl, renderEmailTemplate } from "@/lib/messaging/template";
 import { env } from "@/config";
 import { magicLinksCollection, oauthStatesCollection, verificationTokensCollection } from "./claim.model";
 
@@ -9,21 +10,20 @@ const OAUTH_STATE_EXPIRY_MS = 10 * 60 * 1000;
 
 export async function sendClaimEmail(email: string, campaignId: string, campaignName: string, payoutAmount: number): Promise<void> {
   const token = await createMagicLink("email", email, campaignId);
-  const link = `${process.env.FRONTEND_URL || "http://localhost:3000"}/claim/${campaignId}?token=${token}`;
+  const link = `${getFrontendUrl()}/claim/${campaignId}?token=${token}`;
   const amountInSol = (payoutAmount / 1e9).toFixed(4);
 
-  await sendEmail(
-    email,
-    `Claim ${amountInSol} SOL from ${campaignName}`,
-    `
-      <p>Hello,</p>
-      <p>You're eligible to claim <strong>${amountInSol} SOL</strong> from the <strong>${campaignName}</strong> campaign.</p>
-      <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:6px;">Claim Now</a></p>
-      <p>Or copy this link: ${link}</p>
-      <p>This link expires in 24 hours.</p>
+  const html = renderEmailTemplate({
+    title: `Claim ${amountInSol} SOL`,
+    preheader: `Claim ${amountInSol} SOL from ${campaignName}.`,
+    body: `
+      <p style="margin:0 0 12px;">You're eligible to claim <strong>${amountInSol} SOL</strong> from <strong>${campaignName}</strong>.</p>
+      <p style="margin:0;">This link expires in 24 hours.</p>
     `,
-    { from: env.resend.fromClaims }
-  );
+    cta: { label: "Claim payout", url: link },
+  });
+
+  await sendEmail(email, `Claim ${amountInSol} SOL from ${campaignName}`, html, { from: env.resend.fromClaims });
 }
 
 export async function createMagicLink(method: string, identifier: string, campaignId: string): Promise<string> {

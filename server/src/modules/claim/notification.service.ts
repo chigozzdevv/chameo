@@ -1,4 +1,5 @@
 import { sendEmail } from "@/lib/messaging";
+import { renderEmailTemplate } from "@/lib/messaging/template";
 import { env } from "@/config";
 import { createMagicLink } from "./verification.service";
 
@@ -27,12 +28,15 @@ export async function sendBatchNotifications(
 
       const amountInSol = (payoutAmount / 1e9).toFixed(4);
       const subject = `Claim ${amountInSol} SOL from ${campaignName}`;
-      const html = `
-        <p>Hello,</p>
-        <p>You're eligible to claim <strong>${amountInSol} SOL</strong> from the <strong>${campaignName}</strong> campaign.</p>
-        <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#6366f1;color:white;text-decoration:none;border-radius:6px;">Claim Now</a></p>
-        <p>Or copy this link: ${link}</p>
-      `;
+      const html = renderEmailTemplate({
+        title: `Claim ${amountInSol} SOL`,
+        preheader: `Claim ${amountInSol} SOL from ${campaignName}.`,
+        body: `
+          <p style="margin:0 0 12px;">You're eligible to claim <strong>${amountInSol} SOL</strong> from <strong>${campaignName}</strong>.</p>
+          <p style="margin:0;">Use the link below to complete your claim.</p>
+        `,
+        cta: { label: "Claim payout", url: link },
+      });
 
       const success =
         authMethod === "email"

@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { env } from "@/config";
 import { ConflictError, UnauthorizedError, NotFoundError } from "@/shared";
 import { sendEmail } from "@/lib/messaging";
+import { getFrontendUrl, renderEmailTemplate } from "@/lib/messaging/template";
 import { usersCollection, type AuthPayload } from "./auth.model";
 
 export async function signup(email: string, password: string, orgName: string): Promise<{ user: AuthPayload; token: string }> {
@@ -62,12 +63,18 @@ export async function requestPasswordReset(email: string): Promise<void> {
 
   const resetToken = jwt.sign({ userId: user._id!.toString(), email: user.email }, env.jwt.secret, { expiresIn: "1h" } as jwt.SignOptions);
 
-  await sendEmail(
-    user.email,
-    "Reset Your Password",
-    `<p>Click the link below to reset your password:</p><p><a href="${env.cors.origin}/reset-password?token=${resetToken}">Reset Password</a></p><p>This link expires in 1 hour.</p>`,
-    { from: env.resend.fromAuth }
-  );
+  const resetUrl = `${getFrontendUrl()}/reset-password?token=${resetToken}`;
+  const html = renderEmailTemplate({
+    title: "Reset your password",
+    preheader: "Reset your Chameo password.",
+    body: `
+      <p style="margin:0 0 12px;">Use the link below to reset your Chameo password.</p>
+      <p style="margin:0;">This link expires in 1 hour.</p>
+    `,
+    cta: { label: "Reset password", url: resetUrl },
+  });
+
+  await sendEmail(user.email, "Reset your password", html, { from: env.resend.fromAuth });
 }
 
 export async function resetPassword(token: string, newPassword: string): Promise<void> {
