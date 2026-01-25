@@ -734,21 +734,27 @@ export default function CampaignsPage() {
                         </button>
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                        Claim link
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-700">
-                        <span className="break-all">{campaignLink}</span>
-                        <button
-                          type="button"
-                          onClick={() => campaignLink && copyToClipboard(campaignLink, setCopiedLink)}
-                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500"
-                        >
-                          {copiedLink ? "Copied" : "Copy"}
-                        </button>
+                    {funding?.funded ? (
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          Claim link
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-700">
+                          <span className="break-all">{campaignLink}</span>
+                          <button
+                            type="button"
+                            onClick={() => campaignLink && copyToClipboard(campaignLink, setCopiedLink)}
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500"
+                          >
+                            {copiedLink ? "Copied" : "Copy"}
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                        Claim link unlocks after funding is confirmed.
+                      </div>
+                    )}
                   </div>
                 </div>
 
