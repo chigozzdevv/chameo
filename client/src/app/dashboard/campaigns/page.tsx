@@ -11,6 +11,14 @@ import {
   type CampaignTheme,
   type FundingStatus,
 } from "@/lib/campaign";
+import {
+  initPrivacyCashContext,
+  getPrivacyCashBalance,
+  depositToPrivacyCash,
+  withdrawToAddress,
+  type WalletProvider,
+  type PrivacyCashContext,
+} from "@/lib/privacy-cash";
 
 const filters = ["All", "Payout", "Escrow"];
 
@@ -54,6 +62,14 @@ export default function CampaignsPage() {
   const [fundingLoading, setFundingLoading] = useState(false);
   const [copiedFunding, setCopiedFunding] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [wallet, setWallet] = useState<WalletProvider | null>(null);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [pcContext, setPcContext] = useState<PrivacyCashContext | null>(null);
+  const [pcBalance, setPcBalance] = useState<number | null>(null);
+  const [pcStatus, setPcStatus] = useState<string | null>(null);
+  const [pcLoading, setPcLoading] = useState(false);
+  const [depositLoading, setDepositLoading] = useState(false);
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -80,6 +96,11 @@ export default function CampaignsPage() {
     setStatus(null);
     setCreatedCampaign(null);
     setFunding(null);
+    setWallet(null);
+    setWalletError(null);
+    setPcContext(null);
+    setPcBalance(null);
+    setPcStatus(null);
   }, [searchParams]);
 
   useEffect(() => {
@@ -119,6 +140,8 @@ export default function CampaignsPage() {
     if (!createdCampaign || typeof window === "undefined") return "";
     return `${window.location.origin}/claim/${createdCampaign.id}`;
   }, [createdCampaign]);
+  const hasPrivacyBalance =
+    !!createdCampaign && pcBalance !== null && pcBalance >= createdCampaign.totalRequired;
   const authHint = useMemo(() => {
     switch (form.authMethod) {
       case "email":
@@ -213,6 +236,14 @@ export default function CampaignsPage() {
     setFunding(null);
     setCopiedFunding(false);
     setCopiedLink(false);
+    setWallet(null);
+    setWalletError(null);
+    setPcContext(null);
+    setPcBalance(null);
+    setPcStatus(null);
+    setPcLoading(false);
+    setDepositLoading(false);
+    setWithdrawLoading(false);
     if (searchParams.get("create") === "1") {
       router.replace("/dashboard/campaigns");
     }
@@ -312,6 +343,89 @@ export default function CampaignsPage() {
     }
   };
 
+  const connectWallet = async () => {
+    setWalletError(null);
+    setPcStatus(null);
+    const provider = (window as typeof window & { solana?: any }).solana;
+    if (!provider?.connect || !provider?.signMessage || !provider?.signTransaction) {
+      setWalletError("No wallet found. Install Phantom or another Solana wallet.");
+      return;
+    }
+    try {
+      await provider.connect();
+      const adapter: WalletProvider = {
+        publicKey: provider.publicKey,
+        signMessage: provider.signMessage.bind(provider),
+        signTransaction: provider.signTransaction.bind(provider),
+      };
+      setWallet(adapter);
+      const context = await initPrivacyCashContext(
+        adapter,
+        process.env.NEXT_PUBLIC_SOLANA_RPC_URL
+      );
+      setPcContext(context);
+      setPcLoading(true);
+      const balance = await getPrivacyCashBalance(context, adapter);
+      setPcBalance(balance);
+    } catch (error) {
+      setWalletError(error instanceof Error ? error.message : "Wallet connection failed.");
+    } finally {
+      setPcLoading(false);
+    }
+  };
+
+  const refreshPrivacyBalance = async () => {
+    if (!wallet || !pcContext) return;
+    setPcLoading(true);
+    setPcStatus(null);
+    try {
+      const balance = await getPrivacyCashBalance(pcContext, wallet);
+      setPcBalance(balance);
+    } catch (error) {
+      setPcStatus(error instanceof Error ? error.message : "Unable to refresh private balance.");
+    } finally {
+      setPcLoading(false);
+    }
+  };
+
+  const handlePrivacyDeposit = async () => {
+    if (!wallet || !pcContext || !createdCampaign) return;
+    setDepositLoading(true);
+    setPcStatus(null);
+    try {
+      const tx = await depositToPrivacyCash(pcContext, wallet, createdCampaign.totalRequired);
+      setPcStatus(`Deposit submitted: ${tx}`);
+      const balance = await getPrivacyCashBalance(pcContext, wallet);
+      setPcBalance(balance);
+    } catch (error) {
+      setPcStatus(error instanceof Error ? error.message : "Privacy Cash deposit failed.");
+    } finally {
+      setDepositLoading(false);
+    }
+  };
+
+  const handlePrivacyWithdraw = async () => {
+    if (!wallet || !pcContext || !createdCampaign) return;
+    setWithdrawLoading(true);
+    setPcStatus(null);
+    try {
+      const result = await withdrawToAddress(
+        pcContext,
+        wallet,
+        createdCampaign.fundingAddress,
+        createdCampaign.totalRequired
+      );
+      setPcStatus(`Withdraw submitted: ${result.tx}`);
+      const balance = await getPrivacyCashBalance(pcContext, wallet);
+      setPcBalance(balance);
+      await refreshFunding(createdCampaign.id);
+    } catch (error) {
+      setPcStatus(error instanceof Error ? error.message : "Privacy Cash withdraw failed.");
+    } finally {
+      setWithdrawLoading(false);
+    }
+  };
+
   const previewTitle = form.name.trim() || "Campaign preview";
   const previewDescription =
     form.description.trim() || "Add a short description for claimants.";
@@ -341,6 +455,14 @@ export default function CampaignsPage() {
               setFunding(null);
               setCopiedFunding(false);
               setCopiedLink(false);
+              setWallet(null);
+              setWalletError(null);
+              setPcContext(null);
+              setPcBalance(null);
+              setPcStatus(null);
+              setPcLoading(false);
+              setDepositLoading(false);
+              setWithdrawLoading(false);
             }}
             className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white"
           >
@@ -709,61 +831,104 @@ export default function CampaignsPage() {
               <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
                 <div className="space-y-4 rounded-2xl border border-slate-200 bg-white/90 p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    Funding checklist
+                    Privacy Cash funding
                   </p>
                   <div className="space-y-3 text-sm text-slate-600">
                     <p>
-                      Send <strong>{createdCampaign ? formatSol(createdCampaign.totalRequired) : "—"} SOL</strong> to the
-                      campaign wallet below. Once funds arrive, click “Refresh funding” to move them into Privacy Cash.
+                      Deposit{" "}
+                      <strong>{createdCampaign ? formatSol(createdCampaign.totalRequired) : "—"} SOL</strong> into
+                      Privacy Cash, then withdraw it to the campaign wallet. This breaks the on-chain link before
+                      claims go live.
                     </p>
                     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                        Campaign wallet
+                        Creator wallet
                       </p>
-                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-700">
-                        <span className="break-all">{createdCampaign?.fundingAddress}</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            createdCampaign &&
-                            copyToClipboard(createdCampaign.fundingAddress, setCopiedFunding)
-                          }
-                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500"
-                        >
-                          {copiedFunding ? "Copied" : "Copy"}
-                        </button>
-                      </div>
-                    </div>
-                    {funding?.funded ? (
-                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                          Claim link
-                        </p>
+                      {wallet ? (
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-700">
-                          <span className="break-all">{campaignLink}</span>
+                          <span className="break-all">{wallet.publicKey.toBase58()}</span>
                           <button
                             type="button"
-                            onClick={() => campaignLink && copyToClipboard(campaignLink, setCopiedLink)}
-                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500"
+                            onClick={refreshPrivacyBalance}
+                            disabled={pcLoading}
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 disabled:opacity-60"
                           >
-                            {copiedLink ? "Copied" : "Copy"}
+                            {pcLoading ? "Refreshing" : "Refresh balance"}
                           </button>
                         </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={connectWallet}
+                          className="mt-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white"
+                        >
+                          Connect wallet
+                        </button>
+                      )}
+                      {walletError ? (
+                        <p className="mt-2 text-xs text-rose-500">{walletError}</p>
+                      ) : null}
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                        Privacy Cash balance
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-700">
+                        <span>{pcBalance === null ? "—" : `${formatSol(pcBalance)} SOL`}</span>
                       </div>
-                    ) : (
-                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-                        Claim link unlocks after funding is confirmed.
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={handlePrivacyDeposit}
+                        disabled={!wallet || !pcContext || depositLoading}
+                        className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white disabled:opacity-60"
+                      >
+                        {depositLoading ? "Depositing" : "Deposit to Privacy Cash"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handlePrivacyWithdraw}
+                        disabled={!wallet || !pcContext || withdrawLoading || !hasPrivacyBalance}
+                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 disabled:opacity-60"
+                      >
+                        {withdrawLoading ? "Withdrawing" : "Withdraw to campaign wallet"}
+                      </button>
+                    </div>
+                    {wallet && pcContext && !hasPrivacyBalance ? (
+                      <p className="text-xs text-slate-500">
+                        Deposit enough to cover the required amount before withdrawing.
+                      </p>
+                    ) : null}
+                    {pcStatus ? (
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
+                        {pcStatus}
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-slate-200 bg-white/90 p-5">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      Funding status
+                      Campaign wallet
                     </p>
                     <div className="mt-4 space-y-3 text-sm text-slate-600">
+                      <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-700">
+                          <span className="break-all">{createdCampaign?.fundingAddress}</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              createdCampaign &&
+                              copyToClipboard(createdCampaign.fundingAddress, setCopiedFunding)
+                            }
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500"
+                          >
+                            {copiedFunding ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      </div>
                       <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
                         <span>On-chain wallet</span>
                         <span>{funding ? `${formatSol(funding.onChainBalance)} SOL` : "—"}</span>
@@ -786,8 +951,29 @@ export default function CampaignsPage() {
                         disabled={fundingLoading}
                         className="w-full rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                       >
-                        {fundingLoading ? "Refreshing…" : "Refresh funding"}
+                        {fundingLoading ? "Refreshing..." : "Refresh funding"}
                       </button>
+                      {funding?.funded ? (
+                        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                            Claim link
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-700">
+                            <span className="break-all">{campaignLink}</span>
+                            <button
+                              type="button"
+                              onClick={() => campaignLink && copyToClipboard(campaignLink, setCopiedLink)}
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500"
+                            >
+                              {copiedLink ? "Copied" : "Copy"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                          Claim link unlocks after funding is confirmed.
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -838,9 +1024,10 @@ export default function CampaignsPage() {
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white"
+                  disabled={!funding?.funded}
+                  className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
                 >
-                  Done
+                  {funding?.funded ? "Done" : "Complete funding"}
                 </button>
               )}
             </div>
