@@ -32,7 +32,7 @@ export default function DashboardPage() {
         if (items?.length) {
           setActiveCampaignId(items[0].id);
         } else {
-          setActiveCampaignId("");
+          setActiveCampaignId("__create__");
         }
       })
       .catch(() => {
@@ -94,7 +94,7 @@ export default function DashboardPage() {
   }, [campaigns]);
 
   const handleAnalyticsClick = () => {
-    if (!activeCampaignId) {
+    if (!activeCampaignId || activeCampaignId === "__create__") {
       router.push("/dashboard/campaigns");
       return;
     }
@@ -162,15 +162,17 @@ export default function DashboardPage() {
               onChange={(event) => handleCampaignChange(event.target.value)}
               className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 focus:outline-none"
             >
-              <option value="" disabled>
-                Choose campaign
-              </option>
               {campaigns.length ? (
-                campaigns.map((campaign) => (
-                  <option key={campaign.id} value={campaign.id}>
-                    {campaign.name}
+                <>
+                  <option value="" disabled>
+                    Choose campaign
                   </option>
-                ))
+                  {campaigns.map((campaign) => (
+                    <option key={campaign.id} value={campaign.id}>
+                      {campaign.name}
+                    </option>
+                  ))}
+                </>
               ) : (
                 <option value="__create__">Create campaign</option>
               )}
