@@ -121,6 +121,8 @@ chameo/
 1. Server writes encrypted analytics counters on-chain.
 2. Creator is granted decrypt access to read totals.
 
+Note: On-chain analytics only track `view`, `link-click`, and `claim-attempt`; `claim-success`, `claim-failure`, and `vote` are currently ignored in `server/src/modules/analytics/analytics.service.ts`.
+
 ## Key Files
 
 - Privacy Cash: `server/src/lib/privacy-cash/`, `server/src/modules/campaign/wallet.service.ts`
