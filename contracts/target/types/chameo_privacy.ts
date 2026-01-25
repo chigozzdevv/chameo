@@ -1,13 +1,19 @@
-{
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/chameo_privacy.json`.
+ */
+export type ChameoPrivacy = {
   "address": "FsoGyYnvQDu5zXHmWHiyCxi7nWMr7RYxB1zGgz8ciJVM",
   "metadata": {
-    "name": "chameo_privacy",
+    "name": "chameoPrivacy",
     "version": "0.1.0",
     "spec": "0.1.0"
   },
   "instructions": [
     {
-      "name": "cast_vote_zk",
+      "name": "castVoteZk",
       "discriminator": [
         59,
         246,
@@ -40,17 +46,17 @@
               },
               {
                 "kind": "arg",
-                "path": "campaign_id"
+                "path": "campaignId"
               },
               {
                 "kind": "arg",
-                "path": "nullifier_value"
+                "path": "nullifierValue"
               }
             ]
           }
         },
         {
-          "name": "voting_pool",
+          "name": "votingPool",
           "writable": true,
           "pda": {
             "seeds": [
@@ -72,7 +78,7 @@
               },
               {
                 "kind": "arg",
-                "path": "campaign_id"
+                "path": "campaignId"
               }
             ]
           }
@@ -83,20 +89,20 @@
           "signer": true
         },
         {
-          "name": "zk_verifier_program"
+          "name": "zkVerifierProgram"
         },
         {
-          "name": "inco_lightning_program",
+          "name": "incoLightningProgram",
           "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "campaign_id",
+          "name": "campaignId",
           "type": {
             "array": [
               "u8",
@@ -105,7 +111,7 @@
           }
         },
         {
-          "name": "nullifier_value",
+          "name": "nullifierValue",
           "type": {
             "array": [
               "u8",
@@ -118,17 +124,17 @@
           "type": "bytes"
         },
         {
-          "name": "public_witness",
+          "name": "publicWitness",
           "type": "bytes"
         },
         {
-          "name": "encrypted_vote",
+          "name": "encryptedVote",
           "type": "bytes"
         }
       ]
     },
     {
-      "name": "close_voting",
+      "name": "closeVoting",
       "discriminator": [
         148,
         200,
@@ -141,7 +147,7 @@
       ],
       "accounts": [
         {
-          "name": "voting_pool",
+          "name": "votingPool",
           "writable": true,
           "pda": {
             "seeds": [
@@ -163,7 +169,7 @@
               },
               {
                 "kind": "arg",
-                "path": "campaign_id"
+                "path": "campaignId"
               }
             ]
           }
@@ -174,28 +180,28 @@
           "signer": true
         },
         {
-          "name": "allowed_address"
+          "name": "allowedAddress"
         },
         {
-          "name": "allowance_refund",
+          "name": "allowanceRefund",
           "writable": true
         },
         {
-          "name": "allowance_equal",
+          "name": "allowanceEqual",
           "writable": true
         },
         {
-          "name": "inco_lightning_program",
+          "name": "incoLightningProgram",
           "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "campaign_id",
+          "name": "campaignId",
           "type": {
             "array": [
               "u8",
@@ -204,13 +210,13 @@
           }
         },
         {
-          "name": "allowed_address",
+          "name": "allowedAddress",
           "type": "pubkey"
         }
       ]
     },
     {
-      "name": "grant_analytics_access",
+      "name": "grantAnalyticsAccess",
       "discriminator": [
         221,
         74,
@@ -243,7 +249,7 @@
               },
               {
                 "kind": "arg",
-                "path": "campaign_id"
+                "path": "campaignId"
               }
             ]
           }
@@ -254,44 +260,44 @@
           "signer": true
         },
         {
-          "name": "allowed_address"
+          "name": "allowedAddress"
         },
         {
-          "name": "allowance_page_views",
+          "name": "allowancePageViews",
           "writable": true
         },
         {
-          "name": "allowance_link_clicks",
+          "name": "allowanceLinkClicks",
           "writable": true
         },
         {
-          "name": "allowance_claim_starts",
+          "name": "allowanceClaimStarts",
           "writable": true
         },
         {
-          "name": "allowance_claim_successes",
+          "name": "allowanceClaimSuccesses",
           "writable": true
         },
         {
-          "name": "allowance_claim_failures",
+          "name": "allowanceClaimFailures",
           "writable": true
         },
         {
-          "name": "allowance_votes",
+          "name": "allowanceVotes",
           "writable": true
         },
         {
-          "name": "inco_lightning_program",
+          "name": "incoLightningProgram",
           "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "campaign_id",
+          "name": "campaignId",
           "type": {
             "array": [
               "u8",
@@ -300,13 +306,13 @@
           }
         },
         {
-          "name": "allowed_address",
+          "name": "allowedAddress",
           "type": "pubkey"
         }
       ]
     },
     {
-      "name": "initialize_analytics",
+      "name": "initializeAnalytics",
       "discriminator": [
         39,
         6,
@@ -339,7 +345,7 @@
               },
               {
                 "kind": "arg",
-                "path": "campaign_id"
+                "path": "campaignId"
               }
             ]
           }
@@ -350,17 +356,17 @@
           "signer": true
         },
         {
-          "name": "inco_lightning_program",
+          "name": "incoLightningProgram",
           "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "campaign_id",
+          "name": "campaignId",
           "type": {
             "array": [
               "u8",
@@ -371,7 +377,7 @@
       ]
     },
     {
-      "name": "initialize_voting_pool",
+      "name": "initializeVotingPool",
       "discriminator": [
         217,
         10,
@@ -384,7 +390,7 @@
       ],
       "accounts": [
         {
-          "name": "voting_pool",
+          "name": "votingPool",
           "writable": true,
           "pda": {
             "seeds": [
@@ -406,7 +412,7 @@
               },
               {
                 "kind": "arg",
-                "path": "campaign_id"
+                "path": "campaignId"
               }
             ]
           }
@@ -417,17 +423,17 @@
           "signer": true
         },
         {
-          "name": "inco_lightning_program",
+          "name": "incoLightningProgram",
           "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "campaign_id",
+          "name": "campaignId",
           "type": {
             "array": [
               "u8",
@@ -436,7 +442,7 @@
           }
         },
         {
-          "name": "eligibility_root",
+          "name": "eligibilityRoot",
           "type": {
             "array": [
               "u8",
@@ -445,13 +451,13 @@
           }
         },
         {
-          "name": "zk_verifier_program",
+          "name": "zkVerifierProgram",
           "type": "pubkey"
         }
       ]
     },
     {
-      "name": "set_eligibility_root",
+      "name": "setEligibilityRoot",
       "discriminator": [
         19,
         109,
@@ -464,7 +470,7 @@
       ],
       "accounts": [
         {
-          "name": "voting_pool",
+          "name": "votingPool",
           "writable": true,
           "pda": {
             "seeds": [
@@ -486,7 +492,7 @@
               },
               {
                 "kind": "arg",
-                "path": "campaign_id"
+                "path": "campaignId"
               }
             ]
           }
@@ -498,7 +504,7 @@
       ],
       "args": [
         {
-          "name": "campaign_id",
+          "name": "campaignId",
           "type": {
             "array": [
               "u8",
@@ -507,7 +513,7 @@
           }
         },
         {
-          "name": "eligibility_root",
+          "name": "eligibilityRoot",
           "type": {
             "array": [
               "u8",
@@ -518,7 +524,7 @@
       ]
     },
     {
-      "name": "track_event",
+      "name": "trackEvent",
       "discriminator": [
         26,
         103,
@@ -551,7 +557,7 @@
               },
               {
                 "kind": "arg",
-                "path": "campaign_id"
+                "path": "campaignId"
               }
             ]
           }
@@ -561,13 +567,13 @@
           "signer": true
         },
         {
-          "name": "inco_lightning_program",
+          "name": "incoLightningProgram",
           "address": "5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj"
         }
       ],
       "args": [
         {
-          "name": "campaign_id",
+          "name": "campaignId",
           "type": {
             "array": [
               "u8",
@@ -576,11 +582,11 @@
           }
         },
         {
-          "name": "encrypted_increment",
+          "name": "encryptedIncrement",
           "type": "bytes"
         },
         {
-          "name": "event_type",
+          "name": "eventType",
           "type": "u8"
         }
       ]
@@ -588,7 +594,7 @@
   ],
   "accounts": [
     {
-      "name": "Analytics",
+      "name": "analytics",
       "discriminator": [
         135,
         28,
@@ -601,7 +607,7 @@
       ]
     },
     {
-      "name": "Nullifier",
+      "name": "nullifier",
       "discriminator": [
         18,
         56,
@@ -614,7 +620,7 @@
       ]
     },
     {
-      "name": "VotingPool",
+      "name": "votingPool",
       "discriminator": [
         89,
         90,
@@ -630,73 +636,73 @@
   "errors": [
     {
       "code": 6000,
-      "name": "Unauthorized",
-      "msg": "Unauthorized"
+      "name": "unauthorized",
+      "msg": "unauthorized"
     },
     {
       "code": 6001,
-      "name": "VotingNotActive",
+      "name": "votingNotActive",
       "msg": "Voting not active"
     },
     {
       "code": 6002,
-      "name": "InvalidEventType",
+      "name": "invalidEventType",
       "msg": "Invalid event type"
     },
     {
       "code": 6003,
-      "name": "InvalidZkVerifier",
+      "name": "invalidZkVerifier",
       "msg": "Invalid ZK verifier program"
     },
     {
       "code": 6004,
-      "name": "InvalidProofLength",
+      "name": "invalidProofLength",
       "msg": "Invalid ZK proof length"
     },
     {
       "code": 6005,
-      "name": "InvalidPublicWitnessLength",
+      "name": "invalidPublicWitnessLength",
       "msg": "Invalid ZK public witness length"
     },
     {
       "code": 6006,
-      "name": "InvalidCiphertextLength",
+      "name": "invalidCiphertextLength",
       "msg": "Invalid ciphertext length"
     },
     {
       "code": 6007,
-      "name": "MerkleRootMismatch",
+      "name": "merkleRootMismatch",
       "msg": "Merkle root mismatch"
     },
     {
       "code": 6008,
-      "name": "NullifierMismatch",
+      "name": "nullifierMismatch",
       "msg": "Nullifier mismatch"
     },
     {
       "code": 6009,
-      "name": "CommitmentMismatch",
+      "name": "commitmentMismatch",
       "msg": "Commitment mismatch"
     },
     {
       "code": 6010,
-      "name": "InvalidAllowedAddress",
+      "name": "invalidAllowedAddress",
       "msg": "Invalid allowed address"
     },
     {
       "code": 6011,
-      "name": "InvalidPoseidonInput",
+      "name": "invalidPoseidonInput",
       "msg": "Invalid poseidon input"
     }
   ],
   "types": [
     {
-      "name": "Analytics",
+      "name": "analytics",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "campaign_id",
+            "name": "campaignId",
             "type": {
               "array": [
                 "u8",
@@ -709,42 +715,42 @@
             "type": "pubkey"
           },
           {
-            "name": "page_views",
+            "name": "pageViews",
             "type": {
               "defined": {
-                "name": "Euint128"
+                "name": "euint128"
               }
             }
           },
           {
-            "name": "link_clicks",
+            "name": "linkClicks",
             "type": {
               "defined": {
-                "name": "Euint128"
+                "name": "euint128"
               }
             }
           },
           {
-            "name": "claim_starts",
+            "name": "claimStarts",
             "type": {
               "defined": {
-                "name": "Euint128"
+                "name": "euint128"
               }
             }
           },
           {
-            "name": "claim_successes",
+            "name": "claimSuccesses",
             "type": {
               "defined": {
-                "name": "Euint128"
+                "name": "euint128"
               }
             }
           },
           {
-            "name": "claim_failures",
+            "name": "claimFailures",
             "type": {
               "defined": {
-                "name": "Euint128"
+                "name": "euint128"
               }
             }
           },
@@ -752,7 +758,7 @@
             "name": "votes",
             "type": {
               "defined": {
-                "name": "Euint128"
+                "name": "euint128"
               }
             }
           }
@@ -760,7 +766,7 @@
       }
     },
     {
-      "name": "Euint128",
+      "name": "euint128",
       "type": {
         "kind": "struct",
         "fields": [
@@ -769,12 +775,12 @@
       }
     },
     {
-      "name": "Nullifier",
+      "name": "nullifier",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "campaign_id",
+            "name": "campaignId",
             "type": {
               "array": [
                 "u8",
@@ -795,12 +801,12 @@
       }
     },
     {
-      "name": "VotingPool",
+      "name": "votingPool",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "campaign_id",
+            "name": "campaignId",
             "type": {
               "array": [
                 "u8",
@@ -813,7 +819,7 @@
             "type": "pubkey"
           },
           {
-            "name": "eligibility_root",
+            "name": "eligibilityRoot",
             "type": {
               "array": [
                 "u8",
@@ -822,35 +828,35 @@
             }
           },
           {
-            "name": "zk_verifier_program",
+            "name": "zkVerifierProgram",
             "type": "pubkey"
           },
           {
-            "name": "refund_host_votes",
+            "name": "refundHostVotes",
             "type": {
               "defined": {
-                "name": "Euint128"
+                "name": "euint128"
               }
             }
           },
           {
-            "name": "equal_distribution_votes",
+            "name": "equalDistributionVotes",
             "type": {
               "defined": {
-                "name": "Euint128"
+                "name": "euint128"
               }
             }
           },
           {
-            "name": "total_votes",
+            "name": "totalVotes",
             "type": "u64"
           },
           {
-            "name": "is_active",
+            "name": "isActive",
             "type": "bool"
           }
         ]
       }
     }
   ]
-}
+};
