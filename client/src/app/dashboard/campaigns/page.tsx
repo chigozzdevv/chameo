@@ -688,7 +688,8 @@ export default function CampaignsPage() {
     setPcStatus(null);
     try {
       const { withdrawToAddress, getPrivacyCashBalance } = await loadPrivacyCashModule();
-      const targetLamports = withdrawNetLamports || campaignDepositLamports;
+      // Privacy Cash withdraw pre-fee amount so net matches the campaign target.
+      const targetLamports = withdrawTargetLamports || campaignDepositLamports;
       const result = await withdrawToAddress(
         pcContext,
         wallet,
