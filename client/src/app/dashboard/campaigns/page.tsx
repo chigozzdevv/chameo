@@ -85,6 +85,7 @@ export default function CampaignsPage() {
   const [pcLoading, setPcLoading] = useState(false);
   const [withdrawEstimate, setWithdrawEstimate] = useState<WithdrawEstimate | null>(null);
   const [depositEstimate, setDepositEstimate] = useState<DepositEstimate | null>(null);
+  const [depositBufferLamports, setDepositBufferLamports] = useState<number>(0);
   const [depositLoading, setDepositLoading] = useState(false);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
 
@@ -123,6 +124,7 @@ export default function CampaignsPage() {
     setPcStatus(null);
     setWithdrawEstimate(null);
     setDepositEstimate(null);
+    setDepositBufferLamports(0);
   }, [searchParams]);
 
   useEffect(() => {
@@ -139,13 +141,21 @@ export default function CampaignsPage() {
     if (!createdCampaign) {
       setWithdrawEstimate(null);
       setDepositEstimate(null);
+      setDepositBufferLamports(0);
       return;
     }
     (async () => {
       try {
-        const { getDepositEstimate, getWithdrawEstimate } = await loadPrivacyCashModule();
+        const { getDepositEstimate, getDepositRentBufferLamports, getWithdrawEstimate } =
+          await loadPrivacyCashModule();
+        let rentBuffer = 0;
+        try {
+          rentBuffer = await getDepositRentBufferLamports(process.env.NEXT_PUBLIC_SOLANA_RPC_URL);
+        } catch {
+          rentBuffer = 0;
+        }
         let deposit: DepositEstimate | null = null;
-        let targetLamports = createdCampaign.totalRequired;
+        let targetLamports = createdCampaign.totalRequired + rentBuffer;
         try {
           deposit = await getDepositEstimate(targetLamports);
           if (deposit.depositLamports > 0) {
@@ -161,11 +171,13 @@ export default function CampaignsPage() {
           withdraw = null;
         }
         if (active) {
+          setDepositBufferLamports(rentBuffer);
           setDepositEstimate(deposit);
           setWithdrawEstimate(withdraw);
         }
       } catch {
         if (active) {
+          setDepositBufferLamports(0);
           setDepositEstimate(null);
           setWithdrawEstimate(null);
         }
@@ -227,8 +239,9 @@ export default function CampaignsPage() {
     return `${window.location.origin}/claim/${createdCampaign.id}`;
   }, [createdCampaign]);
   const requiredLamports = createdCampaign?.totalRequired ?? 0;
+  const campaignTargetLamports = requiredLamports + depositBufferLamports;
   const depositFeeLamports = depositEstimate?.feeLamports ?? 0;
-  const campaignDepositLamports = depositEstimate?.depositLamports ?? requiredLamports;
+  const campaignDepositLamports = depositEstimate?.depositLamports ?? campaignTargetLamports;
   const withdrawTargetLamports = withdrawEstimate?.requestedLamports ?? campaignDepositLamports;
   const withdrawFeeLamports = withdrawEstimate?.feeLamports ?? 0;
   const withdrawNetLamports = withdrawEstimate?.netLamports ?? campaignDepositLamports;
@@ -356,6 +369,7 @@ export default function CampaignsPage() {
     setPcLoading(false);
     setWithdrawEstimate(null);
     setDepositEstimate(null);
+    setDepositBufferLamports(0);
     setDepositLoading(false);
     setWithdrawLoading(false);
     if (searchParams.get("create") === "1") {
@@ -382,6 +396,7 @@ export default function CampaignsPage() {
     setPcLoading(false);
     setWithdrawEstimate(null);
     setDepositEstimate(null);
+    setDepositBufferLamports(0);
     setDepositLoading(false);
     setWithdrawLoading(false);
 
@@ -740,6 +755,7 @@ export default function CampaignsPage() {
               setPcLoading(false);
               setWithdrawEstimate(null);
               setDepositEstimate(null);
+              setDepositBufferLamports(0);
               setDepositLoading(false);
               setWithdrawLoading(false);
             }}
@@ -1200,6 +1216,10 @@ export default function CampaignsPage() {
                       <p className="text-xs text-slate-500">
                         {withdrawEstimate
                           ? `Includes ~${formatSol(withdrawFeeLamports)} SOL relayer fees so the campaign wallet receives ${formatSol(withdrawNetLamports)} SOL${
+                              depositBufferLamports > 0
+                                ? ` (includes ~${formatSol(depositBufferLamports)} SOL auto-deposit buffer)`
+                                : ""
+                            }${
                               depositFeeLamports > 0
                                 ? ` (covers ~${formatSol(depositFeeLamports)} SOL deposit fee)`
                                 : ""
@@ -1325,6 +1345,12 @@ export default function CampaignsPage() {
                         <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
                           <span>Privacy Cash deposit fee (est.)</span>
                           <span>{formatSol(depositFeeLamports)} SOL</span>
+                        </div>
+                      ) : null}
+                      {depositBufferLamports > 0 ? (
+                        <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
+                          <span>Auto-deposit buffer (est.)</span>
+                          <span>{formatSol(depositBufferLamports)} SOL</span>
                         </div>
                       ) : null}
                       <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">

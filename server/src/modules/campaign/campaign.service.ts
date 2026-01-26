@@ -20,6 +20,18 @@ import {
 } from "./wallet.service";
 import { initializeAnalyticsForCampaign } from "@/modules/analytics";
 
+const NULLIFIER_ACCOUNT_SIZE = 9;
+const NULLIFIER_ACCOUNT_COUNT = 2;
+const AUTO_DEPOSIT_TX_FEE_LAMPORTS = 5_000;
+let cachedDepositBufferLamports: number | null = null;
+
+async function getAutoDepositBufferLamports(): Promise<number> {
+  if (cachedDepositBufferLamports !== null) return cachedDepositBufferLamports;
+  const rent = await connection.getMinimumBalanceForRentExemption(NULLIFIER_ACCOUNT_SIZE);
+  cachedDepositBufferLamports = rent * NULLIFIER_ACCOUNT_COUNT + AUTO_DEPOSIT_TX_FEE_LAMPORTS;
+  return cachedDepositBufferLamports;
+}
+
 export async function createCampaign(
   userId: string,
   orgSlug: string,
@@ -292,45 +304,63 @@ export async function checkFunding(
   if (pcBalance < totalRequired && onChainFresh && privacyFresh) {
     if (onChainBalance > 0) {
       try {
-        const { signature } = await depositToCampaign(id, onChainBalance);
+        let depositBuffer = 0;
         try {
-          pcBalance = await getCampaignPrivateBalance(id);
+          depositBuffer = await getAutoDepositBufferLamports();
         } catch (error) {
-          privacyFresh = false;
           warnings.push(
             error instanceof Error
-              ? `Privacy Cash balance check failed after deposit: ${error.message}`
-              : "Privacy Cash balance check failed after deposit"
+              ? `Auto-deposit rent check failed: ${error.message}`
+              : "Auto-deposit rent check failed"
           );
         }
-        try {
-          onChainBalance = await connection.getBalance(new PublicKey(campaignWallet));
-        } catch (error) {
-          onChainFresh = false;
-          warnings.push(
-            error instanceof Error
-              ? `On-chain balance check failed after deposit: ${error.message}`
-              : "On-chain balance check failed after deposit"
-          );
-        }
-        const funded = doc.funded || (privacyFresh ? pcBalance >= totalRequired : false);
 
-        if (funded && (!doc.funded || doc.status === "pending-funding")) {
-          const update: Partial<CampaignDoc> = { funded: true, fundedAmount: pcBalance };
-          if (doc.status === "pending-funding") update.status = "active";
-          await col.updateOne({ id }, { $set: update });
+        const depositAmount = Math.max(0, onChainBalance - depositBuffer);
+        if (depositAmount <= 0) {
+          warnings.push(
+            "Auto-deposit skipped: on-chain balance does not cover rent/fees for deposit. Top up the campaign wallet."
+          );
+        } else {
+          const { signature } = await depositToCampaign(id, depositAmount);
+          try {
+            pcBalance = await getCampaignPrivateBalance(id);
+          } catch (error) {
+            privacyFresh = false;
+            warnings.push(
+              error instanceof Error
+                ? `Privacy Cash balance check failed after deposit: ${error.message}`
+                : "Privacy Cash balance check failed after deposit"
+            );
+          }
+          try {
+            onChainBalance = await connection.getBalance(new PublicKey(campaignWallet));
+          } catch (error) {
+            onChainFresh = false;
+            warnings.push(
+              error instanceof Error
+                ? `On-chain balance check failed after deposit: ${error.message}`
+                : "On-chain balance check failed after deposit"
+            );
+          }
+          const funded = doc.funded || (privacyFresh ? pcBalance >= totalRequired : false);
+
+          if (funded && (!doc.funded || doc.status === "pending-funding")) {
+            const update: Partial<CampaignDoc> = { funded: true, fundedAmount: pcBalance };
+            if (doc.status === "pending-funding") update.status = "active";
+            await col.updateOne({ id }, { $set: update });
+          }
+          return {
+            balance: pcBalance,
+            totalRequired,
+            funded,
+            depositTx: signature,
+            onChainBalance,
+            campaignWallet,
+            warnings,
+            onChainFresh,
+            privacyFresh,
+          };
         }
-        return {
-          balance: pcBalance,
-          totalRequired,
-          funded,
-          depositTx: signature,
-          onChainBalance,
-          campaignWallet,
-          warnings,
-          onChainFresh,
-          privacyFresh,
-        };
       } catch (error) {
         warnings.push(error instanceof Error ? `Auto-deposit failed: ${error.message}` : "Auto-deposit failed");
       }

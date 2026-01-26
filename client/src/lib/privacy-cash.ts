@@ -40,6 +40,9 @@ export type DepositEstimate = {
 const SIGN_MESSAGE = "Privacy Money account sign in";
 const DEFAULT_RPC_URL = "https://api.mainnet-beta.solana.com";
 const KEY_BASE_PATH = "/privacy-cash/transaction2";
+const NULLIFIER_ACCOUNT_SIZE = 9;
+const NULLIFIER_ACCOUNT_COUNT = 2;
+const DEFAULT_TX_FEE_LAMPORTS = 5_000;
 
 function getStorage(): Storage {
   if (typeof window === "undefined" || !window.localStorage) {
@@ -151,4 +154,10 @@ export async function getDepositEstimate(netLamports: number): Promise<DepositEs
   const depositLamports = Math.ceil(target / (1 - feeRate));
   const feeLamports = Math.max(0, depositLamports - target);
   return { netLamports: target, feeLamports, feeRate, depositLamports };
+}
+
+export async function getDepositRentBufferLamports(rpcUrl?: string): Promise<number> {
+  const connection = new Connection(rpcUrl || DEFAULT_RPC_URL, "confirmed");
+  const rent = await connection.getMinimumBalanceForRentExemption(NULLIFIER_ACCOUNT_SIZE);
+  return rent * NULLIFIER_ACCOUNT_COUNT + DEFAULT_TX_FEE_LAMPORTS;
 }
