@@ -54,7 +54,7 @@ export async function withdrawFromCampaign(
   campaignId: string,
   amount: number,
   recipient: string
-): Promise<{ signature: string; amount: number }> {
+): Promise<{ signature: string; amount: number; isPartial: boolean }> {
   const keys = await getCampaignWalletKeys(campaignId);
   return withdraw(keys, amount, recipient);
 }

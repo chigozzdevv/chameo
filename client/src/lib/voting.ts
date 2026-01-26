@@ -18,6 +18,7 @@ export interface WalletAdapter {
 }
 
 function getCampaignIdBytes(campaignId: string): number[] {
+  // PDA seeds are fixed-width; zero-pad or truncate to 32 bytes.
   const hash = new Uint8Array(32);
   const encoder = new TextEncoder();
   const bytes = encoder.encode(campaignId);

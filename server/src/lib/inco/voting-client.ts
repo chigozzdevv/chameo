@@ -6,6 +6,7 @@ const PROGRAM_ID = new PublicKey("GvoS27ShvsjMoWumJnHnuLbCZpHSS8k36uJFzuctvQtU")
 const INCO_LIGHTNING_ID = new PublicKey("5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj");
 
 export function getCampaignIdBytes(campaignId: string): number[] {
+  // PDA seeds are fixed-width; zero-pad or truncate to 32 bytes.
   const hash = Buffer.alloc(32);
   const bytes = Buffer.from(campaignId, "utf-8");
   bytes.copy(hash, 0, 0, Math.min(bytes.length, 32));
@@ -23,6 +24,7 @@ export function findAllowancePda(handle: bigint, allowedAddress: PublicKey): [Pu
     handleBuffer[i] = Number(h & BigInt(0xff));
     h = h >> BigInt(8);
   }
+  // Handles are encoded as 128-bit little-endian for the Inco Lightning PDA seed.
   return PublicKey.findProgramAddressSync([handleBuffer, allowedAddress.toBuffer()], INCO_LIGHTNING_ID);
 }
 

@@ -69,6 +69,7 @@ async function runCommand(command: string, args: string[], cwd: string): Promise
 }
 
 async function enqueueProof<T>(task: () => Promise<T>): Promise<T> {
+  // Serialize proof generation to avoid concurrent writes to shared Noir artifacts.
   const next = proofQueue.then(task, task);
   proofQueue = next.then(
     () => undefined,
@@ -169,6 +170,7 @@ export async function buildVoteProof(params: {
   const proofData = await getMerkleProof(params.leafHexes, params.identityHash, params.merkleDepth);
   const secret = identity;
   const secretChunks = chunkBytes(secret, CHUNK_SIZE, 2);
+  // Nullifier is Poseidon(secret chunks); commitment is Poseidon(ciphertext chunks).
   const nullifierBuf = await poseidonHash(secretChunks);
   const ciphertextChunks = chunkBytes(ciphertext, CHUNK_SIZE, CIPHERTEXT_FIELDS);
   const commitmentBuf = await poseidonHash(ciphertextChunks);

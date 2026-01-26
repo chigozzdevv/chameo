@@ -56,6 +56,7 @@ async function hashPair(left: Buffer, right: Buffer): Promise<Buffer> {
 }
 
 async function hashIdentityLeaf(identity: Buffer): Promise<Buffer> {
+  // Identity leaves are Poseidon hashes of two 16-byte chunks.
   const chunks = chunkBytes(identity, CHUNK_SIZE, 2);
   return poseidonHashFields(chunks.map((chunk) => new BN(chunk)));
 }
@@ -120,6 +121,7 @@ export async function getMerkleProof(
     const isRight = index % 2 === 1;
     const siblingIndex = isRight ? index - 1 : index + 1;
     siblings.push(layer[siblingIndex]);
+    // pathBits uses 1 for right nodes, 0 for left nodes.
     pathBits.push(isRight ? 1 : 0);
     index = Math.floor(index / 2);
   }

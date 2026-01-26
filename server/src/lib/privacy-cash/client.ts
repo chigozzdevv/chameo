@@ -1,4 +1,5 @@
 import {
+  Connection,
   Keypair,
   PublicKey,
   LAMPORTS_PER_SOL,
@@ -71,14 +72,16 @@ export async function withdraw(keys: WalletKeys, requestedAmount: number, recipi
   utxos.sort((a, b) => b.amount.cmp(a.amount));
 
   const cfg = await fetchRelayerConfig();
-  validateFeeConfig(cfg);
+  const { withdrawFeeRate, withdrawRentFee } = normalizeRelayerConfig(cfg);
 
   // Calculate fees: percentage + rent
-  let fee = Math.floor(requestedAmount * cfg.withdraw_fee_rate + LAMPORTS_PER_SOL * cfg.withdraw_rent_fee);
+  let fee = Math.floor(requestedAmount * withdrawFeeRate + LAMPORTS_PER_SOL * withdrawRentFee);
   let amount = Math.floor(requestedAmount - fee);
   const total = utxos.reduce((s, u) => s + u.amount.toNumber(), 0);
+  let isPartial = false;
 
   if (total < amount + fee) {
+    isPartial = true;
     amount = total;
     amount -= fee;
   }
@@ -136,7 +139,7 @@ export async function withdraw(keys: WalletKeys, requestedAmount: number, recipi
   const result = await submitWithdraw(params);
   await waitForConfirmation(enc1.toString("hex"));
 
-  return { signature: result.signature, amount, fee, recipient };
+  return { signature: result.signature, amount, fee, recipient, isPartial };
 }
 
 export async function deposit(keys: WalletKeys, amount: number): Promise<DepositResult> {
@@ -150,6 +153,21 @@ export async function deposit(keys: WalletKeys, amount: number): Promise<Deposit
   const onChainBalance = await connection.getBalance(keypair.publicKey);
   if (onChainBalance < amount) throw new Error(`Insufficient on-chain balance: ${onChainBalance} < ${amount}`);
 
+  const cfg = await fetchRelayerConfig();
+  const { depositFeeRate } = normalizeRelayerConfig(cfg);
+  const fee = Math.floor(amount * depositFeeRate);
+
+  if (fee > 0 && amount <= fee) {
+    throw new Error("Deposit amount too low after fees");
+  }
+
+  const accounts = getProgramPDAs();
+  const depositLimit = await fetchDepositLimit(connection, accounts.tree);
+
+  if (depositLimit && new BN(amount).gt(depositLimit)) {
+    throw new Error(`Deposit exceeds limit: ${amount} > ${depositLimit.toString()}`);
+  }
+
   const existingUtxos = await fetchUnspentUtxos(encryptionKey, utxoKeypair, wasm, encryptionKeyV1, utxoKeypairV1);
   const { root, nextIndex } = await fetchTreeState();
 
@@ -158,7 +176,8 @@ export async function deposit(keys: WalletKeys, amount: number): Promise<Deposit
   const inputs = [input1, input2];
 
   const existingTotal = input1.amount.add(input2.amount);
-  const outputAmount = existingTotal.add(new BN(amount));
+  // Fee is taken from the deposited amount, so outputs reflect the net value.
+  const outputAmount = existingTotal.add(new BN(amount)).sub(new BN(fee));
   const outputs = [createUtxo(wasm, utxoKeypair, outputAmount, nextIndex), createUtxo(wasm, utxoKeypair, new BN(0), nextIndex + 1)];
 
   const proofs = await fetchInputProofs(inputs, wasm);
@@ -169,16 +188,15 @@ export async function deposit(keys: WalletKeys, amount: number): Promise<Deposit
   const enc2 = encryptUtxo(outputs[1], encryptionKey);
 
   const extAmount = amount;
-  const publicAmount = calculatePublicAmount(extAmount, 0);
+  const publicAmount = calculatePublicAmount(extAmount, fee);
   const recipientPlaceholder = new PublicKey("AWexibGxNFKTa1b5R5MN4PJr9HWnWRwf8EW9g8cLx3dM");
-  const extHash = getExtDataHash(recipientPlaceholder, new BN(extAmount), enc1, enc2, new BN(0), FEE_RECIPIENT, new PublicKey(SOL_MINT));
+  const extHash = getExtDataHash(recipientPlaceholder, new BN(extAmount), enc1, enc2, new BN(fee), FEE_RECIPIENT, new PublicKey(SOL_MINT));
 
   const proofInput = buildProofInput(root, inputs, outputs, nullifiers, commitments, proofs, publicAmount, extHash);
   const proof = await generateProof(proofInput);
 
   const pdas = findNullifierPDAs(proof.inputNullifiers);
-  const accounts = getProgramPDAs();
-  const serialized = serializeProof(proof, extAmount, 0, enc1, enc2);
+  const serialized = serializeProof(proof, extAmount, fee, enc1, enc2);
 
   const depositIx = new TransactionInstruction({
     keys: [
@@ -234,11 +252,11 @@ async function fetchUnspentUtxos(
     const data = await fetchEncryptedUtxos(offset, offset + FETCH_BATCH_SIZE);
 
     for (const enc of data.encrypted_outputs || []) {
-      // Try V2 decryption first, fallback to V1 if available
-      let utxo = decryptUtxo(Buffer.from(enc, "hex"), encryptionKey, keypair, encryptionKeyV1);
-      if (!utxo && encryptionKeyV1 && keypairV1) {
-        utxo = decryptUtxo(Buffer.from(enc, "hex"), encryptionKeyV1, keypairV1);
-      }
+      const utxo = decryptUtxo(
+        Buffer.from(enc, "hex"),
+        { v2: encryptionKey, v1: encryptionKeyV1 },
+        { v2: keypair, v1: keypairV1 }
+      );
       if (utxo && utxo.amount.toNumber() > 0) {
         decryptedUtxos.push({ utxo, encryptedOutput: enc });
       }
@@ -323,13 +341,31 @@ function buildProofInput(
   };
 }
 
-function validateFeeConfig(cfg: RelayerConfig): void {
-  if (cfg.withdraw_fee_rate < 0 || cfg.withdraw_fee_rate > 0.1) {
-    throw new Error(`Invalid withdraw fee rate: ${cfg.withdraw_fee_rate}`);
+function normalizeFeeRate(rate: number, label: string): number {
+  if (!Number.isFinite(rate) || rate < 0) {
+    throw new Error(`Invalid ${label}: ${rate}`);
   }
-  if (cfg.withdraw_rent_fee < 0 || cfg.withdraw_rent_fee > 0.01) {
+  return rate > 1 ? rate / 10000 : rate;
+}
+
+function normalizeRelayerConfig(cfg: RelayerConfig): {
+  depositFeeRate: number;
+  withdrawFeeRate: number;
+  withdrawRentFee: number;
+} {
+  const depositFeeRate = normalizeFeeRate(cfg.deposit_fee_rate, "deposit fee rate");
+  const withdrawFeeRate = normalizeFeeRate(cfg.withdraw_fee_rate, "withdraw fee rate");
+  if (!Number.isFinite(cfg.withdraw_rent_fee) || cfg.withdraw_rent_fee < 0) {
     throw new Error(`Invalid withdraw rent fee: ${cfg.withdraw_rent_fee}`);
   }
+  return { depositFeeRate, withdrawFeeRate, withdrawRentFee: cfg.withdraw_rent_fee };
+}
+
+async function fetchDepositLimit(connection: Connection, treeAccount: PublicKey): Promise<BN | null> {
+  const info = await connection.getAccountInfo(treeAccount);
+  if (!info || info.data.length < 4128) return null;
+  // Tree account layout stores max_deposit_amount at bytes 4120..4128 (little-endian u64).
+  return new BN(info.data.slice(4120, 4128), "le");
 }
 
 async function waitForConfirmation(encryptedOutputHex: string): Promise<void> {

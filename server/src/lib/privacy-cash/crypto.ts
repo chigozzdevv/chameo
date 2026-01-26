@@ -70,39 +70,54 @@ export function encryptUtxo(utxo: Utxo, encryptionKey: Buffer): Buffer {
   return Buffer.concat([ENCRYPTION_VERSION, iv, cipher.getAuthTag(), encrypted]);
 }
 
-export function decryptUtxo(data: Buffer, encryptionKey: Buffer, keypair: UtxoKeypair, v1Key?: Buffer): Utxo | null {
+type EncryptionKeys = {
+  v2: Buffer;
+  v1?: Buffer;
+};
+
+type UtxoKeypairs = {
+  v2: UtxoKeypair;
+  v1?: UtxoKeypair;
+};
+
+function isV2Payload(data: Buffer): boolean {
+  // V2 encryption is prefixed with a fixed 8-byte version marker.
+  return data.length >= ENCRYPTION_VERSION.length && data.subarray(0, ENCRYPTION_VERSION.length).equals(ENCRYPTION_VERSION);
+}
+
+export function decryptUtxo(data: Buffer, keys: EncryptionKeys, keypairs: UtxoKeypairs): Utxo | null {
   try {
-    const isV2 = data.length >= 8 && data.subarray(0, 8).equals(ENCRYPTION_VERSION);
+    const isV2 = isV2Payload(data);
 
     if (isV2) {
       const iv = data.subarray(8, 20);
       const authTag = data.subarray(20, 36);
       const encrypted = data.subarray(36);
-      const decipher = crypto.createDecipheriv("aes-256-gcm", encryptionKey, iv);
+      const decipher = crypto.createDecipheriv("aes-256-gcm", keys.v2, iv);
       decipher.setAuthTag(authTag);
       const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
       const [amount, blinding, index, mintAddress] = decrypted.split("|");
-      return { amount: new BN(amount), blinding: new BN(blinding), index: parseInt(index), mintAddress, keypair };
+      return { amount: new BN(amount), blinding: new BN(blinding), index: parseInt(index), mintAddress, keypair: keypairs.v2 };
     }
 
     // Fallback to V1 encryption for backward compatibility
-    if (!v1Key) return null;
+    if (!keys.v1 || !keypairs.v1) return null;
 
     const iv = data.subarray(0, 16);
     const authTag = data.subarray(16, 32);
     const encrypted = data.subarray(32);
-    const hmacKey = v1Key.subarray(16, 31);
+    const hmacKey = keys.v1.subarray(16, 31);
     const hmac = crypto.createHmac("sha256", hmacKey);
     hmac.update(iv);
     hmac.update(encrypted);
     const calculatedTag = hmac.digest().subarray(0, 16);
     if (!crypto.timingSafeEqual(authTag, calculatedTag)) return null;
 
-    const key = v1Key.subarray(0, 16);
+    const key = keys.v1.subarray(0, 16);
     const decipher = crypto.createDecipheriv("aes-128-ctr", key, iv);
     const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
     const [amount, blinding, index, mintAddress] = decrypted.split("|");
-    return { amount: new BN(amount), blinding: new BN(blinding), index: parseInt(index), mintAddress, keypair };
+    return { amount: new BN(amount), blinding: new BN(blinding), index: parseInt(index), mintAddress, keypair: keypairs.v1 };
   } catch {
     return null;
   }

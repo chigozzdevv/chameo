@@ -45,6 +45,7 @@ export interface WithdrawResult {
   amount: number;
   fee: number;
   recipient: string;
+  isPartial: boolean;
 }
 
 export interface DepositResult {

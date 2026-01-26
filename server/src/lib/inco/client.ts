@@ -27,6 +27,7 @@ export function getServerPublicKey(): PublicKey {
 
 async function getProgram(): Promise<Program> {
   if (!_program) {
+    // Anchor IDL is shared with contracts; load it lazily to keep startup light.
     const idl = require("../../../../contracts/target/idl/chameo_privacy.json");
     const wallet = new Wallet(getServerKeypair());
     const provider = new AnchorProvider(devnetConnection, wallet, { commitment: "confirmed" });
@@ -36,6 +37,7 @@ async function getProgram(): Promise<Program> {
 }
 
 function parseHandle(value: any): bigint {
+  // Anchor can return handles as BN, bigint, or nested objects depending on account shape.
   if (value?.toString) {
     const asString = value.toString();
     if (/^\d+$/.test(asString)) return BigInt(asString);
@@ -72,6 +74,7 @@ async function decryptHandles(handles: bigint[]): Promise<string[]> {
 }
 
 export function getCampaignIdBytes(campaignId: string): number[] {
+  // PDA seeds are fixed-width; zero-pad or truncate to 32 bytes.
   const hash = Buffer.alloc(32);
   const bytes = Buffer.from(campaignId, "utf-8");
   bytes.copy(hash, 0, 0, Math.min(bytes.length, 32));
@@ -103,6 +106,7 @@ export function findAllowancePda(handle: bigint, allowedAddress: PublicKey): [Pu
     handleBuffer[i] = Number(h & BigInt(0xff));
     h = h >> BigInt(8);
   }
+  // Handles are encoded as 128-bit little-endian for the Inco Lightning PDA seed.
   return PublicKey.findProgramAddressSync([handleBuffer, allowedAddress.toBuffer()], INCO_LIGHTNING_ID);
 }
 

@@ -51,6 +51,11 @@ function getStorage(): Storage {
   return window.localStorage;
 }
 
+function normalizeFeeRate(rate: number): number {
+  if (!Number.isFinite(rate) || rate < 0) return 0;
+  return rate > 1 ? rate / 10000 : rate;
+}
+
 export async function initPrivacyCashContext(
   wallet: WalletProvider,
   rpcUrl?: string
@@ -121,7 +126,7 @@ export async function withdrawToAddress(
 }
 
 export async function getWithdrawEstimate(targetLamports: number): Promise<WithdrawEstimate> {
-  const feeRate = Number(await getConfig("withdraw_fee_rate"));
+  const feeRate = normalizeFeeRate(Number(await getConfig("withdraw_fee_rate")));
   const rentFeeSol = Number(await getConfig("withdraw_rent_fee"));
   const rentFeeLamports = Math.round(rentFeeSol * 1e9);
   const target = Math.max(0, Math.floor(targetLamports));
@@ -141,7 +146,7 @@ export async function getWithdrawEstimate(targetLamports: number): Promise<Withd
 }
 
 export async function getDepositEstimate(netLamports: number): Promise<DepositEstimate> {
-  const feeRate = Number(await getConfig("deposit_fee_rate"));
+  const feeRate = normalizeFeeRate(Number(await getConfig("deposit_fee_rate")));
   const target = Math.max(0, Math.floor(netLamports));
   if (!Number.isFinite(feeRate) || feeRate <= 0 || feeRate >= 1 || target <= 0) {
     return {
