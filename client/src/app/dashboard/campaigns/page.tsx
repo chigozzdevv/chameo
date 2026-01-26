@@ -4,17 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   addRecipients,
+  closeCampaign,
   createCampaign,
   checkFunding,
+  deleteCampaign,
   getCampaignForEdit,
   listCampaigns,
+  replaceRecipients,
   updateCampaign,
   uploadCampaignImage,
   type CampaignSummary,
   type CampaignTheme,
   type FundingStatus,
 } from "@/lib/campaign";
-import type { PrivacyCashContext, WalletProvider, WithdrawEstimate } from "@/lib/privacy-cash";
+import type { DepositEstimate, PrivacyCashContext, WalletProvider, WithdrawEstimate } from "@/lib/privacy-cash";
 
 const filters = ["All", "Payout", "Escrow"];
 
@@ -41,11 +44,14 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<CampaignSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("All");
+  const [listStatus, setListStatus] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
+  const [replaceRecipientsEnabled, setReplaceRecipientsEnabled] = useState(false);
+  const [editParticipantCount, setEditParticipantCount] = useState<number | null>(null);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -78,6 +84,7 @@ export default function CampaignsPage() {
   const [pcStatus, setPcStatus] = useState<string | null>(null);
   const [pcLoading, setPcLoading] = useState(false);
   const [withdrawEstimate, setWithdrawEstimate] = useState<WithdrawEstimate | null>(null);
+  const [depositEstimate, setDepositEstimate] = useState<DepositEstimate | null>(null);
   const [depositLoading, setDepositLoading] = useState(false);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
 
@@ -105,6 +112,8 @@ export default function CampaignsPage() {
     setStep(1);
     setStatus(null);
     setEditingCampaignId(null);
+    setReplaceRecipientsEnabled(false);
+    setEditParticipantCount(null);
     setCreatedCampaign(null);
     setFunding(null);
     setWallet(null);
@@ -112,6 +121,8 @@ export default function CampaignsPage() {
     setPcContext(null);
     setPcBalance(null);
     setPcStatus(null);
+    setWithdrawEstimate(null);
+    setDepositEstimate(null);
   }, [searchParams]);
 
   useEffect(() => {
@@ -127,15 +138,37 @@ export default function CampaignsPage() {
     let active = true;
     if (!createdCampaign) {
       setWithdrawEstimate(null);
+      setDepositEstimate(null);
       return;
     }
     (async () => {
       try {
-        const { getWithdrawEstimate } = await loadPrivacyCashModule();
-        const estimate = await getWithdrawEstimate(createdCampaign.totalRequired);
-        if (active) setWithdrawEstimate(estimate);
+        const { getDepositEstimate, getWithdrawEstimate } = await loadPrivacyCashModule();
+        let deposit: DepositEstimate | null = null;
+        let targetLamports = createdCampaign.totalRequired;
+        try {
+          deposit = await getDepositEstimate(targetLamports);
+          if (deposit.depositLamports > 0) {
+            targetLamports = deposit.depositLamports;
+          }
+        } catch {
+          deposit = null;
+        }
+        let withdraw: WithdrawEstimate | null = null;
+        try {
+          withdraw = await getWithdrawEstimate(targetLamports);
+        } catch {
+          withdraw = null;
+        }
+        if (active) {
+          setDepositEstimate(deposit);
+          setWithdrawEstimate(withdraw);
+        }
       } catch {
-        if (active) setWithdrawEstimate(null);
+        if (active) {
+          setDepositEstimate(null);
+          setWithdrawEstimate(null);
+        }
       }
     })();
     return () => {
@@ -194,14 +227,16 @@ export default function CampaignsPage() {
     return `${window.location.origin}/claim/${createdCampaign.id}`;
   }, [createdCampaign]);
   const requiredLamports = createdCampaign?.totalRequired ?? 0;
-  const withdrawTargetLamports = withdrawEstimate?.requestedLamports ?? requiredLamports;
+  const depositFeeLamports = depositEstimate?.feeLamports ?? 0;
+  const campaignDepositLamports = depositEstimate?.depositLamports ?? requiredLamports;
+  const withdrawTargetLamports = withdrawEstimate?.requestedLamports ?? campaignDepositLamports;
   const withdrawFeeLamports = withdrawEstimate?.feeLamports ?? 0;
-  const withdrawNetLamports = withdrawEstimate?.netLamports ?? requiredLamports;
-  const depositTargetLamports =
-    withdrawTargetLamports > 0 ? withdrawTargetLamports : requiredLamports;
+  const withdrawNetLamports = withdrawEstimate?.netLamports ?? campaignDepositLamports;
+  const creatorDepositLamports =
+    withdrawTargetLamports > 0 ? withdrawTargetLamports : campaignDepositLamports;
   const fundingWarning = funding?.warnings?.length ? funding.warnings.join(" | ") : null;
   const hasPrivacyBalance =
-    !!createdCampaign && pcBalance !== null && pcBalance >= depositTargetLamports;
+    !!createdCampaign && pcBalance !== null && pcBalance >= creatorDepositLamports;
   const authHint = useMemo(() => {
     switch (form.authMethod) {
       case "email":
@@ -284,7 +319,11 @@ export default function CampaignsPage() {
       setStatus("Add at least one recipient.");
       return false;
     }
-    if (isEditing && form.recipients && !recipients.length) {
+    if (isEditing && replaceRecipientsEnabled && !recipients.length) {
+      setStatus("Add at least one recipient to replace.");
+      return false;
+    }
+    if (isEditing && !replaceRecipientsEnabled && form.recipients && !recipients.length) {
       setStatus("Add at least one recipient.");
       return false;
     }
@@ -303,6 +342,8 @@ export default function CampaignsPage() {
     setStatus(null);
     setEditingCampaignId(null);
     setEditLoading(false);
+    setReplaceRecipientsEnabled(false);
+    setEditParticipantCount(null);
     setCreatedCampaign(null);
     setFunding(null);
     setCopiedFunding(false);
@@ -314,6 +355,7 @@ export default function CampaignsPage() {
     setPcStatus(null);
     setPcLoading(false);
     setWithdrawEstimate(null);
+    setDepositEstimate(null);
     setDepositLoading(false);
     setWithdrawLoading(false);
     if (searchParams.get("create") === "1") {
@@ -327,6 +369,7 @@ export default function CampaignsPage() {
     setStatus("Loading campaign...");
     setEditingCampaignId(campaignId);
     setEditLoading(true);
+    setReplaceRecipientsEnabled(false);
     setCreatedCampaign(null);
     setFunding(null);
     setCopiedFunding(false);
@@ -338,6 +381,7 @@ export default function CampaignsPage() {
     setPcStatus(null);
     setPcLoading(false);
     setWithdrawEstimate(null);
+    setDepositEstimate(null);
     setDepositLoading(false);
     setWithdrawLoading(false);
 
@@ -359,6 +403,7 @@ export default function CampaignsPage() {
       setTheme({ ...themeDefaults, ...(campaign.theme || {}) });
       setImageFile(null);
       setImageUrl(campaign.imageUrl || "");
+      setEditParticipantCount(campaign.participantCount ?? null);
       setCreatedCampaign({
         id: campaign.id,
         fundingAddress: result.fundingAddress,
@@ -370,6 +415,40 @@ export default function CampaignsPage() {
       setStatus(error instanceof Error ? error.message : "Unable to load campaign.");
     } finally {
       setEditLoading(false);
+    }
+  };
+
+  const handleDeleteCampaign = async (campaignId: string) => {
+    const confirmed = window.confirm(
+      "Delete this campaign? This cannot be undone and is only allowed for pending or closed campaigns."
+    );
+    if (!confirmed) return;
+    setListStatus(null);
+    try {
+      await deleteCampaign(campaignId);
+      const updated = await listCampaigns();
+      setCampaigns(updated);
+      setListStatus("Campaign deleted.");
+    } catch (error) {
+      setListStatus(error instanceof Error ? error.message : "Unable to delete campaign.");
+    }
+  };
+
+  const handleCloseCampaign = async (campaignId: string) => {
+    const reclaimAddress = window.prompt("Enter a wallet address to reclaim remaining funds:");
+    if (!reclaimAddress) return;
+    setListStatus(null);
+    try {
+      const result = await closeCampaign(campaignId, reclaimAddress.trim());
+      const updated = await listCampaigns();
+      setCampaigns(updated);
+      if (result.reclaimedAmount > 0) {
+        setListStatus(`Campaign closed. Reclaimed ${formatSol(result.reclaimedAmount)} SOL.`);
+      } else {
+        setListStatus("Campaign closed.");
+      }
+    } catch (error) {
+      setListStatus(error instanceof Error ? error.message : "Unable to close campaign.");
     }
   };
 
@@ -434,7 +513,12 @@ export default function CampaignsPage() {
           await uploadCampaignImage(editingCampaignId, { file: imageFile, imageUrl });
         }
 
-        if (recipients.length) {
+        if (replaceRecipientsEnabled) {
+          if (!recipients.length) {
+            throw new Error("Add at least one recipient to replace.");
+          }
+          await replaceRecipients(editingCampaignId, recipients);
+        } else if (recipients.length) {
           await addRecipients(editingCampaignId, recipients);
         }
 
@@ -565,7 +649,7 @@ export default function CampaignsPage() {
     setPcStatus(null);
     try {
       const { depositToPrivacyCash, getPrivacyCashBalance } = await loadPrivacyCashModule();
-      const targetLamports = depositTargetLamports || createdCampaign.totalRequired;
+      const targetLamports = creatorDepositLamports || createdCampaign.totalRequired;
       const currentBalance = pcBalance ?? 0;
       const missingLamports = Math.max(0, targetLamports - currentBalance);
       if (missingLamports <= 0) {
@@ -589,7 +673,7 @@ export default function CampaignsPage() {
     setPcStatus(null);
     try {
       const { withdrawToAddress, getPrivacyCashBalance } = await loadPrivacyCashModule();
-      const targetLamports = depositTargetLamports || createdCampaign.totalRequired;
+      const targetLamports = withdrawNetLamports || campaignDepositLamports;
       const result = await withdrawToAddress(
         pcContext,
         wallet,
@@ -642,6 +726,8 @@ export default function CampaignsPage() {
               setStatus(null);
               setEditingCampaignId(null);
               setEditLoading(false);
+              setReplaceRecipientsEnabled(false);
+              setEditParticipantCount(null);
               setCreatedCampaign(null);
               setFunding(null);
               setCopiedFunding(false);
@@ -653,6 +739,7 @@ export default function CampaignsPage() {
               setPcStatus(null);
               setPcLoading(false);
               setWithdrawEstimate(null);
+              setDepositEstimate(null);
               setDepositLoading(false);
               setWithdrawLoading(false);
             }}
@@ -678,6 +765,11 @@ export default function CampaignsPage() {
             </button>
           ))}
         </div>
+        {listStatus ? (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-xs font-semibold text-slate-600">
+            {listStatus}
+          </div>
+        ) : null}
 
         {loading ? (
           <div className="mt-6 rounded-2xl border border-slate-200 bg-white/90 px-5 py-8 text-sm text-slate-500">
@@ -685,41 +777,74 @@ export default function CampaignsPage() {
           </div>
         ) : filteredCampaigns.length ? (
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {filteredCampaigns.map((campaign) => (
-              <div
-                key={campaign.id}
-                className="rounded-2xl border border-slate-200 bg-white/90 px-5 py-4"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      {campaign.type}
-                    </p>
-                    <h3 className="mt-2 text-base font-semibold text-slate-900">
-                      {campaign.name}
-                    </h3>
+            {filteredCampaigns.map((campaign) => {
+              const isPending = campaign.status === "pending-funding";
+              const isActive = campaign.status === "active";
+              const isClosed = campaign.status === "closed";
+              const expiresAtMs = campaign.expiresAt ? campaign.expiresAt * 1000 : 0;
+              const isExpired = !!campaign.expiresAt && expiresAtMs <= Date.now();
+              const canDelete = isPending || isClosed;
+              const canClose = isActive && isExpired;
+
+              return (
+                <div
+                  key={campaign.id}
+                  className="rounded-2xl border border-slate-200 bg-white/90 px-5 py-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                        {campaign.type}
+                      </p>
+                      <h3 className="mt-2 text-base font-semibold text-slate-900">
+                        {campaign.name}
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isPending ? (
+                        <button
+                          type="button"
+                          onClick={() => handleEditCampaign(campaign.id)}
+                          disabled={editLoading}
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 disabled:opacity-60"
+                        >
+                          {editLoading ? "Loading" : "Edit"}
+                        </button>
+                      ) : null}
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                        {campaign.status}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {campaign.status === "pending-funding" ? (
-                      <button
-                        type="button"
-                        onClick={() => handleEditCampaign(campaign.id)}
-                        disabled={editLoading}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 disabled:opacity-60"
-                      >
-                        {editLoading ? "Loading" : "Edit"}
-                      </button>
-                    ) : null}
-                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      {campaign.status}
-                    </span>
-                  </div>
+                  <p className="mt-3 text-xs text-slate-500">
+                    ID: {campaign.id}
+                  </p>
+                  {canDelete || isActive ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      {canDelete ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCampaign(campaign.id)}
+                          className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-600"
+                        >
+                          Delete
+                        </button>
+                      ) : null}
+                      {isActive ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCloseCampaign(campaign.id)}
+                          disabled={!canClose}
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 disabled:opacity-50"
+                        >
+                          {canClose ? "Close" : "Close (after expiry)"}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
-                <p className="mt-3 text-xs text-slate-500">
-                  ID: {campaign.id}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="mt-6 rounded-2xl border border-dashed border-slate-200 bg-white/90 px-5 py-8 text-sm text-slate-500">
@@ -872,22 +997,45 @@ export default function CampaignsPage() {
                     </label>
                   ) : null}
                 </div>
-                <label className="grid gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  {isEditing ? "Add recipients (optional)" : "Eligible recipients"}
+                <div className="grid gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  <span>{isEditing ? "Add recipients (optional)" : "Eligible recipients"}</span>
                   <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                     {isEditing
-                      ? "New recipients will be added. Existing recipients stay the same."
+                      ? replaceRecipientsEnabled
+                        ? "This will replace all existing recipients."
+                        : "New recipients will be added. Existing recipients stay the same."
                       : authHint.helper}
                   </span>
+                  {isEditing ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                      <span>Recipients are hashed and hidden.</span>
+                      {typeof editParticipantCount === "number" ? (
+                        <span>{editParticipantCount} current recipients</span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {isEditing ? (
+                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      <input
+                        type="checkbox"
+                        checked={replaceRecipientsEnabled}
+                        onChange={(event) => setReplaceRecipientsEnabled(event.target.checked)}
+                        className="h-3 w-3 rounded border-slate-300 text-slate-900"
+                      />
+                      <span>Replace recipients list</span>
+                    </div>
+                  ) : null}
                   <textarea
                     value={form.recipients}
                     onChange={(event) => setForm((prev) => ({ ...prev, recipients: event.target.value }))}
                     placeholder={authHint.placeholder}
                     className="min-h-[120px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-normal text-slate-900 focus:border-slate-400 focus:outline-none"
                   />
-                </label>
+                </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  <span>{recipientsList.length} recipients parsed</span>
+                  <span>
+                    {recipientsList.length} {isEditing ? "new recipients parsed" : "recipients parsed"}
+                  </span>
                   {form.recipients ? (
                     <button
                       type="button"
@@ -1044,14 +1192,18 @@ export default function CampaignsPage() {
                   <div className="space-y-3 text-sm text-slate-600">
                     <p>
                       Deposit{" "}
-                      <strong>{createdCampaign ? formatSol(depositTargetLamports) : "—"} SOL</strong> into
+                      <strong>{createdCampaign ? formatSol(creatorDepositLamports) : "—"} SOL</strong> into
                       Privacy Cash, then withdraw it to the campaign wallet. This breaks the on-chain link before
                       claims go live.
                     </p>
                     {createdCampaign ? (
                       <p className="text-xs text-slate-500">
                         {withdrawEstimate
-                          ? `Includes ~${formatSol(withdrawFeeLamports)} SOL relayer fees so the campaign wallet receives ${formatSol(withdrawNetLamports)} SOL.`
+                          ? `Includes ~${formatSol(withdrawFeeLamports)} SOL relayer fees so the campaign wallet receives ${formatSol(withdrawNetLamports)} SOL${
+                              depositFeeLamports > 0
+                                ? ` (covers ~${formatSol(depositFeeLamports)} SOL deposit fee)`
+                                : ""
+                            }.`
                           : `Campaign requires ${formatSol(requiredLamports)} SOL. Relayer fees apply on withdrawal.`}
                       </p>
                     ) : null}
@@ -1112,7 +1264,7 @@ export default function CampaignsPage() {
                     </div>
                     {wallet && pcContext && !hasPrivacyBalance ? (
                       <p className="text-xs text-slate-500">
-                        Deposit at least {formatSol(depositTargetLamports)} SOL before withdrawing.
+                        Deposit at least {formatSol(creatorDepositLamports)} SOL before withdrawing.
                       </p>
                     ) : null}
                     {pcStatus ? (
@@ -1169,9 +1321,15 @@ export default function CampaignsPage() {
                           <span>{formatSol(withdrawFeeLamports)} SOL</span>
                         </div>
                       ) : null}
+                      {depositFeeLamports > 0 ? (
+                        <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
+                          <span>Privacy Cash deposit fee (est.)</span>
+                          <span>{formatSol(depositFeeLamports)} SOL</span>
+                        </div>
+                      ) : null}
                       <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
                         <span>Total to deposit</span>
-                        <span>{createdCampaign ? `${formatSol(depositTargetLamports)} SOL` : "—"}</span>
+                        <span>{createdCampaign ? `${formatSol(creatorDepositLamports)} SOL` : "—"}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
                         <span>Required (net)</span>

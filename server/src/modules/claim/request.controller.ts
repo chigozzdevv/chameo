@@ -1,11 +1,9 @@
-import { Router } from "express";
+import { Request, Response, NextFunction } from "express";
 import { isValidEmail, BadRequestError } from "@/shared";
 import { sendClaimEmail } from "./verification.service";
 import { getCampaignDoc } from "@/modules/campaign";
 
-const router = Router();
-
-router.post("/request/:campaignId", async (req, res, next) => {
+export async function handleRequestClaim(req: Request<{ campaignId: string }>, res: Response, next: NextFunction) {
   try {
     const { campaignId } = req.params;
     const { email } = req.body;
@@ -21,6 +19,4 @@ router.post("/request/:campaignId", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
-
-export default router;
+}

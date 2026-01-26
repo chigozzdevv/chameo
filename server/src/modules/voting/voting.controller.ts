@@ -1,12 +1,13 @@
-import { Router, Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
 import { BadRequestError, ForbiddenError, NotFoundError } from "@/shared";
-import { authMiddleware } from "@/modules/auth";
 import { getCampaignDoc } from "@/modules/campaign";
 import * as votingService from "./voting.service";
 
-const router = Router();
-
-router.get("/:campaignId/info", async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
+export async function handleGetInfo(
+  req: Request<{ campaignId: string }>,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const info = await votingService.getVotingInfo(req.params.campaignId);
     if (!info) {
@@ -17,44 +18,56 @@ router.get("/:campaignId/info", async (req: Request<{ campaignId: string }>, res
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.get("/:campaignId/results", async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
+export async function handleGetResults(
+  req: Request<{ campaignId: string }>,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const results = await votingService.getVoteResults(req.params.campaignId);
     res.json({ success: true, ...results });
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post(
-  "/:campaignId/resolve",
-  authMiddleware,
-  async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
-    try {
-      const campaign = await getCampaignDoc(req.params.campaignId);
-      if (!campaign) throw new NotFoundError("Campaign not found");
-      if (campaign.userId !== req.user!.userId) throw new ForbiddenError();
+export async function handleResolve(
+  req: Request<{ campaignId: string }>,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const campaign = await getCampaignDoc(req.params.campaignId);
+    if (!campaign) throw new NotFoundError("Campaign not found");
+    if (campaign.userId !== req.user!.userId) throw new ForbiddenError();
 
-      await votingService.resolveDispute(req.params.campaignId);
-      res.json({ success: true });
-    } catch (error) {
-      next(error);
-    }
+    await votingService.resolveDispute(req.params.campaignId);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
   }
-);
+}
 
-router.get("/:campaignId/zk-config", async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
+export async function handleGetZkConfig(
+  req: Request<{ campaignId: string }>,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const config = await votingService.getZkConfig(req.params.campaignId);
     res.json({ success: true, ...config });
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/:campaignId/zk-inputs", async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
+export async function handleGetZkInputs(
+  req: Request<{ campaignId: string }>,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const { identityHash } = req.body;
     if (!identityHash) throw new BadRequestError("identityHash required");
@@ -63,9 +76,13 @@ router.post("/:campaignId/zk-inputs", async (req: Request<{ campaignId: string }
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/:campaignId/zk-prove", async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
+export async function handleZkProve(
+  req: Request<{ campaignId: string }>,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const { identityHash, ciphertext } = req.body;
     if (!identityHash || !ciphertext) {
@@ -80,9 +97,13 @@ router.post("/:campaignId/zk-prove", async (req: Request<{ campaignId: string }>
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/:campaignId/zk-cast", async (req: Request<{ campaignId: string }>, res: Response, next: NextFunction) => {
+export async function handleZkCast(
+  req: Request<{ campaignId: string }>,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const { proof, publicWitness, nullifier, ciphertext } = req.body;
     if (!proof || !publicWitness || !nullifier || !ciphertext) {
@@ -99,6 +120,4 @@ router.post("/:campaignId/zk-cast", async (req: Request<{ campaignId: string }>,
   } catch (error) {
     next(error);
   }
-});
-
-export default router;
+}

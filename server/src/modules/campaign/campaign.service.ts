@@ -191,6 +191,57 @@ export async function updateCampaign(
   return { campaign: toEditable(updated), fundingAddress, totalRequired };
 }
 
+export async function replaceRecipients(
+  id: string,
+  userId: string,
+  recipients: string[]
+): Promise<{ total: number }> {
+  if (!Array.isArray(recipients) || recipients.length === 0) {
+    throw new BadRequestError("recipients required");
+  }
+  const col = campaignsCollection();
+  const doc = await col.findOne({ id });
+
+  if (!doc) throw new NotFoundError("Campaign not found");
+  assertEditableCampaign(doc, userId);
+
+  const identityHashes = recipients.map((r: string) => hashIdentity(doc.authMethod, r).toString("hex"));
+  const unique = Array.from(new Set(identityHashes));
+  const eligibilityRoot = (await buildMerkleRoot(unique, env.zk.merkleDepth)).toString("hex");
+
+  await col.updateOne(
+    { id },
+    {
+      $set: {
+        eligibleHashes: unique,
+        eligibilityRoot,
+        claimCount: 0,
+      },
+    }
+  );
+
+  return { total: unique.length };
+}
+
+export async function deleteCampaign(id: string, userId: string): Promise<void> {
+  const col = campaignsCollection();
+  const doc = await col.findOne({ id });
+
+  if (!doc) throw new NotFoundError("Campaign not found");
+  if (doc.userId !== userId) throw new ForbiddenError("Not authorized");
+  if (doc.status === "active") {
+    throw new BadRequestError("Active campaigns must be closed before deletion");
+  }
+  if (doc.status !== "pending-funding" && doc.status !== "closed") {
+    throw new BadRequestError("Only pending or closed campaigns can be deleted");
+  }
+  if (doc.fundedAmount > 0) {
+    throw new BadRequestError("Campaign still has funds; close and reclaim first");
+  }
+
+  await col.deleteOne({ id });
+}
+
 export async function checkFunding(
   id: string
 ): Promise<{
@@ -200,6 +251,9 @@ export async function checkFunding(
   depositTx?: string;
   onChainBalance: number;
   campaignWallet: string;
+  warnings: string[];
+  onChainFresh: boolean;
+  privacyFresh: boolean;
 }> {
   const col = campaignsCollection();
   const doc = await col.findOne({ id });
@@ -320,7 +374,8 @@ export async function addRecipients(id: string, userId: string, recipients: stri
   const doc = await col.findOne({ id });
 
   if (!doc) throw new NotFoundError("Campaign not found");
-  if (doc.userId !== userId) throw new ForbiddenError("Not authorized");
+  assertEditableCampaign(doc, userId);
+  if (doc.authMethod !== authMethod) throw new BadRequestError("Invalid authMethod");
 
   const newHashes = recipients.map((r: string) => hashIdentity(authMethod, r).toString("hex"));
   const uniqueNew = newHashes.filter((h: string) => !doc.eligibleHashes.includes(h));
@@ -502,6 +557,7 @@ function toEditable(doc: CampaignDoc): CampaignEditable {
     maxClaims: doc.maxClaims,
     expiresAt: doc.expiresAt,
     winnersDeadline: doc.winnersDeadline,
+    participantCount: doc.eligibleHashes.length,
     funded: doc.funded,
     status: doc.status,
     refundAddress: doc.refundAddress,

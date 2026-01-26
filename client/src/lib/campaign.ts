@@ -14,6 +14,7 @@ export type CampaignSummary = {
   status: string;
   claimCount?: number;
   maxClaims?: number;
+  expiresAt?: number;
 };
 
 export type CampaignEditable = {
@@ -27,6 +28,7 @@ export type CampaignEditable = {
   maxClaims: number;
   expiresAt: number;
   winnersDeadline?: number;
+  participantCount: number;
   funded: boolean;
   status: string;
   refundAddress?: string;
@@ -149,6 +151,41 @@ export async function addRecipients(campaignId: string, recipients: string[]): P
     },
     token
   );
+}
+
+export async function replaceRecipients(
+  campaignId: string,
+  recipients: string[]
+): Promise<{ total: number }> {
+  const token = getAuthToken();
+  return apiFetch(
+    `/api/campaign/${campaignId}/recipients/replace`,
+    {
+      method: "POST",
+      body: JSON.stringify({ recipients }),
+    },
+    token
+  );
+}
+
+export async function closeCampaign(
+  campaignId: string,
+  reclaimAddress: string
+): Promise<{ reclaimedAmount: number; signature?: string }> {
+  const token = getAuthToken();
+  return apiFetch(
+    `/api/campaign/${campaignId}/close`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reclaimAddress }),
+    },
+    token
+  );
+}
+
+export async function deleteCampaign(campaignId: string): Promise<{ success: boolean }> {
+  const token = getAuthToken();
+  return apiFetch(`/api/campaign/${campaignId}`, { method: "DELETE" }, token);
 }
 
 export async function updateCampaignTheme(campaignId: string, theme: CampaignTheme) {

@@ -85,6 +85,7 @@ export interface CampaignEditable {
   maxClaims: number;
   expiresAt: number;
   winnersDeadline?: number;
+  participantCount: number;
   funded: boolean;
   status: CampaignStatus;
   refundAddress?: string;

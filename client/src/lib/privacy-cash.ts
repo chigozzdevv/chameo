@@ -30,6 +30,13 @@ export type WithdrawEstimate = {
   rentFeeLamports: number;
 };
 
+export type DepositEstimate = {
+  netLamports: number;
+  feeLamports: number;
+  feeRate: number;
+  depositLamports: number;
+};
+
 const SIGN_MESSAGE = "Privacy Money account sign in";
 const DEFAULT_RPC_URL = "https://api.mainnet-beta.solana.com";
 const KEY_BASE_PATH = "/privacy-cash/transaction2";
@@ -81,7 +88,7 @@ export async function depositToPrivacyCash(
     connection: context.connection,
     amount_in_lamports: lamports,
     encryptionService: context.encryptionService,
-    transactionSigner: async (tx) => wallet.signTransaction(tx),
+    transactionSigner: async (tx: VersionedTransaction) => wallet.signTransaction(tx),
   });
   return result.tx;
 }
@@ -128,4 +135,20 @@ export async function getWithdrawEstimate(targetLamports: number): Promise<Withd
   const feeLamports = Math.floor(requestedLamports * feeRate + rentFeeLamports);
   const netLamports = Math.max(0, requestedLamports - feeLamports);
   return { requestedLamports, feeLamports, netLamports, feeRate, rentFeeLamports };
+}
+
+export async function getDepositEstimate(netLamports: number): Promise<DepositEstimate> {
+  const feeRate = Number(await getConfig("deposit_fee_rate"));
+  const target = Math.max(0, Math.floor(netLamports));
+  if (!Number.isFinite(feeRate) || feeRate <= 0 || feeRate >= 1 || target <= 0) {
+    return {
+      netLamports: target,
+      feeLamports: 0,
+      feeRate,
+      depositLamports: target,
+    };
+  }
+  const depositLamports = Math.ceil(target / (1 - feeRate));
+  const feeLamports = Math.max(0, depositLamports - target);
+  return { netLamports: target, feeLamports, feeRate, depositLamports };
 }

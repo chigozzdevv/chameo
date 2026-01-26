@@ -1,11 +1,8 @@
-import { Router } from "express";
+import { Request, Response, NextFunction } from "express";
 import { isValidEmail, BadRequestError } from "@/shared";
 import { signup, login, requestPasswordReset, resetPassword, changePassword } from "./auth.service";
-import { authMiddleware } from "./auth.middleware";
 
-const router = Router();
-
-router.post("/signup", async (req, res, next) => {
+export async function handleSignup(req: Request, res: Response, next: NextFunction) {
   try {
     const { email, password, orgName } = req.body;
     if (!email || !isValidEmail(email)) throw new BadRequestError("Invalid email");
@@ -17,9 +14,9 @@ router.post("/signup", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/login", async (req, res, next) => {
+export async function handleLogin(req: Request, res: Response, next: NextFunction) {
   try {
     const { email, password } = req.body;
     if (!email || !password) throw new BadRequestError("Email and password required");
@@ -29,13 +26,13 @@ router.post("/login", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.get("/me", authMiddleware, (req, res) => {
+export function handleMe(req: Request, res: Response) {
   res.json({ success: true, user: req.user });
-});
+}
 
-router.post("/forgot-password", async (req, res, next) => {
+export async function handleForgotPassword(req: Request, res: Response, next: NextFunction) {
   try {
     const { email } = req.body;
     if (!email || !isValidEmail(email)) throw new BadRequestError("Invalid email");
@@ -45,9 +42,9 @@ router.post("/forgot-password", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/reset-password", async (req, res, next) => {
+export async function handleResetPassword(req: Request, res: Response, next: NextFunction) {
   try {
     const { token, password } = req.body;
     if (!token) throw new BadRequestError("Reset token required");
@@ -58,9 +55,9 @@ router.post("/reset-password", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/change-password", authMiddleware, async (req, res, next) => {
+export async function handleChangePassword(req: Request, res: Response, next: NextFunction) {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) throw new BadRequestError("Current and new password required");
@@ -71,6 +68,4 @@ router.post("/change-password", authMiddleware, async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
-
-export default router;
+}

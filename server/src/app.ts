@@ -6,8 +6,8 @@ import { errorHandler, logger } from "@/shared";
 import { authRoutes } from "@/modules/auth";
 import { campaignRoutes } from "@/modules/campaign";
 import { claimRoutes } from "@/modules/claim";
-import { votingController } from "@/modules/voting";
-import { analyticsController } from "@/modules/analytics";
+import { votingRoutes } from "@/modules/voting";
+import { analyticsRoutes } from "@/modules/analytics";
 
 export function createApp() {
   const app = express();
@@ -42,8 +42,8 @@ export function createApp() {
   app.use("/api/auth", authRoutes);
   app.use("/api/campaign", campaignRoutes);
   app.use("/api/claim", claimRoutes);
-  app.use("/api/voting", votingController);
-  app.use("/api/analytics", analyticsController);
+  app.use("/api/voting", votingRoutes);
+  app.use("/api/analytics", analyticsRoutes);
 
   app.get("/health", (_, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
 

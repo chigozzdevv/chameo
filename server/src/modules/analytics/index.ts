@@ -6,4 +6,4 @@ export {
   grantAnalyticsAccess,
 } from "./analytics.service";
 export { analyticsEventsCollection, campaignAnalyticsCollection, createAnalyticsIndexes } from "./analytics.model";
-export { default as analyticsController } from "./analytics.controller";
+export { analyticsRoutes } from "./analytics.routes";

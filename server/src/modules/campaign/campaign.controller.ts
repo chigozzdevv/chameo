@@ -1,17 +1,12 @@
-import { Router, Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
 import { env } from "@/config";
 import { isValidAuthMethod, isValidPublicKey, BadRequestError, ForbiddenError, NotFoundError } from "@/shared";
-import { authMiddleware } from "@/modules/auth";
 import { trackEvent } from "@/modules/analytics";
 import * as campaignService from "./campaign.service";
 import { getCampaignWalletPublicKey } from "./wallet.service";
 import { sendBatchNotifications } from "@/modules/claim/notification.service";
 import type { CampaignTheme } from "./campaign.model";
 import { uploadCampaignImage } from "@/lib/cloudinary";
-import multer from "multer";
-
-const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const themeRegex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
@@ -26,7 +21,7 @@ function validateTheme(theme?: CampaignTheme): CampaignTheme | undefined {
   return theme;
 }
 
-router.post("/", authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
+export async function handleCreateCampaign(req: Request, res: Response, next: NextFunction) {
   try {
     const {
       name,
@@ -82,18 +77,18 @@ router.post("/", authMiddleware, async (req: Request, res: Response, next: NextF
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.get("/", authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
+export async function handleListCampaigns(req: Request, res: Response, next: NextFunction) {
   try {
     const campaigns = await campaignService.getUserCampaigns(req.user!.userId);
     res.json({ success: true, campaigns });
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.get("/:id", async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleGetCampaign(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const campaign = await campaignService.getCampaign(req.params.id);
     if (!campaign) throw new NotFoundError("Campaign not found");
@@ -105,18 +100,18 @@ router.get("/:id", async (req: Request<{ id: string }>, res: Response, next: Nex
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.get("/:id/edit", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleGetCampaignForEdit(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const result = await campaignService.getCampaignForEdit(req.params.id, req.user!.userId);
     res.json({ success: true, ...result });
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.get("/:id/funding-address", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleGetFundingAddress(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const doc = await campaignService.getCampaignDoc(id);
@@ -132,9 +127,9 @@ router.get("/:id/funding-address", authMiddleware, async (req: Request<{ id: str
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/:id/update", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleUpdateCampaign(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const { name, description, payoutAmount, maxClaims, expiresAt, winnersDeadline, refundAddress, theme } = req.body;
     if (refundAddress && !isValidPublicKey(refundAddress)) {
@@ -155,9 +150,18 @@ router.post("/:id/update", authMiddleware, async (req: Request<{ id: string }>, 
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.get("/:id/funding-config", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleDeleteCampaign(req: Request<{ id: string }>, res: Response, next: NextFunction) {
+  try {
+    await campaignService.deleteCampaign(req.params.id, req.user!.userId);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleGetFundingConfig(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const doc = await campaignService.getCampaignDoc(id);
@@ -178,9 +182,9 @@ router.get("/:id/funding-config", authMiddleware, async (req: Request<{ id: stri
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/:id/check-funding", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleCheckFunding(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const doc = await campaignService.getCampaignDoc(id);
@@ -192,9 +196,9 @@ router.post("/:id/check-funding", authMiddleware, async (req: Request<{ id: stri
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/:id/recipients", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleAddRecipients(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const { recipients } = req.body;
     if (!Array.isArray(recipients) || recipients.length === 0) throw new BadRequestError("recipients required");
@@ -209,9 +213,21 @@ router.post("/:id/recipients", authMiddleware, async (req: Request<{ id: string 
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/:id/notify", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleReplaceRecipients(req: Request<{ id: string }>, res: Response, next: NextFunction) {
+  try {
+    const { recipients } = req.body;
+    if (!Array.isArray(recipients) || recipients.length === 0) throw new BadRequestError("recipients required");
+
+    const result = await campaignService.replaceRecipients(req.params.id, req.user!.userId, recipients);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleNotifyRecipients(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const doc = await campaignService.getCampaignDoc(id);
@@ -237,9 +253,9 @@ router.post("/:id/notify", authMiddleware, async (req: Request<{ id: string }>, 
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/:id/close", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleCloseCampaign(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const { reclaimAddress } = req.body;
@@ -250,9 +266,9 @@ router.post("/:id/close", authMiddleware, async (req: Request<{ id: string }>, r
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/:id/select-winners", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleSelectWinners(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const { winners } = req.body;
     if (!Array.isArray(winners) || winners.length === 0) throw new BadRequestError("winners required");
@@ -262,35 +278,30 @@ router.post("/:id/select-winners", authMiddleware, async (req: Request<{ id: str
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post(
-  "/:id/upload-image",
-  authMiddleware,
-  upload.single("image"),
-  async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
-    try {
-      const { imageUrl } = req.body;
-      if (!req.file && !imageUrl) throw new BadRequestError("imageUrl or image file required");
+export async function handleUploadImage(req: Request<{ id: string }>, res: Response, next: NextFunction) {
+  try {
+    const { imageUrl } = req.body;
+    if (!req.file && !imageUrl) throw new BadRequestError("imageUrl or image file required");
 
-      let finalUrl = imageUrl as string;
-      if (req.file) {
-        finalUrl = await uploadCampaignImage({
-          campaignId: req.params.id,
-          buffer: req.file.buffer,
-          filename: req.file.originalname || "campaign",
-        });
-      }
-
-      await campaignService.updateCampaignImage(req.params.id, req.user!.userId, finalUrl);
-      res.json({ success: true, imageUrl: finalUrl });
-    } catch (error) {
-      next(error);
+    let finalUrl = imageUrl as string;
+    if (req.file) {
+      finalUrl = await uploadCampaignImage({
+        campaignId: req.params.id,
+        buffer: req.file.buffer,
+        filename: req.file.originalname || "campaign",
+      });
     }
-  }
-);
 
-router.post("/:id/theme", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+    await campaignService.updateCampaignImage(req.params.id, req.user!.userId, finalUrl);
+    res.json({ success: true, imageUrl: finalUrl });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleUpdateTheme(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const { theme } = req.body;
     const validatedTheme = validateTheme(theme);
@@ -301,9 +312,9 @@ router.post("/:id/theme", authMiddleware, async (req: Request<{ id: string }>, r
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/:id/refund-address", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleUpdateRefundAddress(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const { refundAddress } = req.body;
     if (!refundAddress) throw new BadRequestError("refundAddress required");
@@ -314,9 +325,9 @@ router.post("/:id/refund-address", authMiddleware, async (req: Request<{ id: str
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/:id/check-dispute", async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+export async function handleCheckDispute(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     await campaignService.checkAndTriggerDispute(req.params.id);
     const campaign = await campaignService.getCampaign(req.params.id);
@@ -324,6 +335,4 @@ router.post("/:id/check-dispute", async (req: Request<{ id: string }>, res: Resp
   } catch (error) {
     next(error);
   }
-});
-
-export default router;
+}

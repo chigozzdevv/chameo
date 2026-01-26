@@ -1,12 +1,10 @@
 import crypto from "crypto";
-import { Router, Request } from "express";
-import { isValidEmail, isValidPublicKey, hashIdentity, BadRequestError, rateLimit } from "@/shared";
+import { Request, Response, NextFunction } from "express";
+import { isValidPublicKey, hashIdentity, BadRequestError } from "@/shared";
 import { authProviders } from "@/lib/auth-providers";
 import { verifyMagicLink, validateVerificationToken, createOAuthState, consumeOAuthState, createVerificationToken } from "./verification.service";
 import { processClaim, getClaimStatus } from "./claim.service";
 import { trackEvent } from "@/modules/analytics";
-
-const router = Router();
 
 function base64UrlEncode(input: Buffer): string {
   return input
@@ -25,7 +23,7 @@ function createCodeChallenge(verifier: string): string {
   return base64UrlEncode(digest);
 }
 
-router.post("/verify/magic-link", async (req, res, next) => {
+export async function handleVerifyMagicLink(req: Request, res: Response, next: NextFunction) {
   try {
     const { token } = req.body;
     if (!token) throw new BadRequestError("token required");
@@ -45,9 +43,9 @@ router.post("/verify/magic-link", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.get("/verify/social/:provider/url", async (req, res, next) => {
+export async function handleSocialUrl(req: Request<{ provider: string }>, res: Response, next: NextFunction) {
   try {
     const { provider } = req.params;
     const { campaignId, redirectUri } = req.query;
@@ -76,9 +74,9 @@ router.get("/verify/social/:provider/url", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/verify/social/:provider/callback", async (req, res, next) => {
+export async function handleSocialCallback(req: Request<{ provider: string }>, res: Response, next: NextFunction) {
   try {
     const { provider } = req.params;
     const { code, state, authData } = req.body;
@@ -108,9 +106,9 @@ router.post("/verify/social/:provider/callback", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.post("/process", async (req, res, next) => {
+export async function handleProcessClaim(req: Request, res: Response, next: NextFunction) {
   try {
     const { campaignId, token, walletAddress } = req.body;
     if (!campaignId) throw new BadRequestError("campaignId required");
@@ -122,9 +120,13 @@ router.post("/process", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
+}
 
-router.get("/status/:campaignId/:identityHash", async (req, res, next) => {
+export async function handleClaimStatus(
+  req: Request<{ campaignId: string; identityHash: string }>,
+  res: Response,
+  next: NextFunction
+) {
   try {
     const { campaignId, identityHash } = req.params;
     const token = req.query.token;
@@ -143,6 +145,4 @@ router.get("/status/:campaignId/:identityHash", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
-
-export default router;
+}
