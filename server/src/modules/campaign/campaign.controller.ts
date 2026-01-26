@@ -107,6 +107,15 @@ router.get("/:id", async (req: Request<{ id: string }>, res: Response, next: Nex
   }
 });
 
+router.get("/:id/edit", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    const result = await campaignService.getCampaignForEdit(req.params.id, req.user!.userId);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/:id/funding-address", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
@@ -120,6 +129,29 @@ router.get("/:id/funding-address", authMiddleware, async (req: Request<{ id: str
       fundingAddress,
       totalRequired: doc.payoutAmount * doc.maxClaims,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/:id/update", authMiddleware, async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  try {
+    const { name, description, payoutAmount, maxClaims, expiresAt, winnersDeadline, refundAddress, theme } = req.body;
+    if (refundAddress && !isValidPublicKey(refundAddress)) {
+      throw new BadRequestError("Invalid refundAddress");
+    }
+    const validatedTheme = theme ? validateTheme(theme) : undefined;
+    const result = await campaignService.updateCampaign(req.params.id, req.user!.userId, {
+      name,
+      description,
+      payoutAmount,
+      maxClaims,
+      expiresAt,
+      winnersDeadline,
+      refundAddress,
+      theme: validatedTheme,
+    });
+    res.json({ success: true, ...result });
   } catch (error) {
     next(error);
   }

@@ -6,6 +6,7 @@ import {
   withdraw,
   getUtxos,
   getBalanceFromUtxos,
+  getConfig,
   EncryptionService,
 } from "privacycash/utils";
 
@@ -19,6 +20,14 @@ export type PrivacyCashContext = {
   connection: Connection;
   lightWasm: LightWasm;
   encryptionService: EncryptionService;
+};
+
+export type WithdrawEstimate = {
+  requestedLamports: number;
+  feeLamports: number;
+  netLamports: number;
+  feeRate: number;
+  rentFeeLamports: number;
 };
 
 const SIGN_MESSAGE = "Privacy Money account sign in";
@@ -99,4 +108,24 @@ export async function withdrawToAddress(
     fee: result.fee_in_lamports,
     isPartial: result.isPartial,
   };
+}
+
+export async function getWithdrawEstimate(targetLamports: number): Promise<WithdrawEstimate> {
+  const feeRate = Number(await getConfig("withdraw_fee_rate"));
+  const rentFeeSol = Number(await getConfig("withdraw_rent_fee"));
+  const rentFeeLamports = Math.round(rentFeeSol * 1e9);
+  const target = Math.max(0, Math.floor(targetLamports));
+  if (target <= 0 || feeRate >= 1) {
+    return {
+      requestedLamports: target,
+      feeLamports: 0,
+      netLamports: target,
+      feeRate,
+      rentFeeLamports,
+    };
+  }
+  const requestedLamports = Math.ceil((target + rentFeeLamports) / (1 - feeRate));
+  const feeLamports = Math.floor(requestedLamports * feeRate + rentFeeLamports);
+  const netLamports = Math.max(0, requestedLamports - feeLamports);
+  return { requestedLamports, feeLamports, netLamports, feeRate, rentFeeLamports };
 }

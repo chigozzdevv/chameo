@@ -63,6 +63,34 @@ export interface CreateCampaignInput {
   requireCompliance?: boolean;
 }
 
+export interface UpdateCampaignInput {
+  name?: string;
+  description?: string;
+  payoutAmount?: number;
+  maxClaims?: number;
+  expiresAt?: number;
+  winnersDeadline?: number | null;
+  refundAddress?: string | null;
+  theme?: CampaignTheme;
+}
+
+export interface CampaignEditable {
+  id: string;
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  type: CampaignType;
+  authMethod: AuthMethod;
+  payoutAmount: number;
+  maxClaims: number;
+  expiresAt: number;
+  winnersDeadline?: number;
+  funded: boolean;
+  status: CampaignStatus;
+  refundAddress?: string;
+  theme?: CampaignTheme;
+}
+
 export interface CampaignPublic {
   id: string;
   name: string;

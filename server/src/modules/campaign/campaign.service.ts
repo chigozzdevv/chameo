@@ -1,7 +1,14 @@
 import { PublicKey } from "@solana/web3.js";
 import { connection, env } from "@/config";
 import { generateId, hashIdentity, NotFoundError, ForbiddenError, BadRequestError } from "@/shared";
-import { campaignsCollection, type CampaignDoc, type CreateCampaignInput, type CampaignPublic } from "./campaign.model";
+import {
+  campaignsCollection,
+  type CampaignDoc,
+  type CreateCampaignInput,
+  type CampaignPublic,
+  type UpdateCampaignInput,
+  type CampaignEditable,
+} from "./campaign.model";
 import { buildMerkleRoot } from "@/lib/zk";
 import * as inco from "@/lib/inco";
 import {
@@ -79,6 +86,111 @@ export async function getUserCampaigns(userId: string): Promise<CampaignPublic[]
   return docs.map(toPublic);
 }
 
+function assertEditableCampaign(doc: CampaignDoc, userId: string): void {
+  if (doc.userId !== userId) throw new ForbiddenError("Not authorized");
+  if (doc.funded || doc.status !== "pending-funding") {
+    throw new BadRequestError("Only pending campaigns can be edited");
+  }
+}
+
+export async function getCampaignForEdit(
+  id: string,
+  userId: string
+): Promise<{ campaign: CampaignEditable; fundingAddress: string; totalRequired: number }> {
+  const col = campaignsCollection();
+  const doc = await col.findOne({ id });
+  if (!doc) throw new NotFoundError("Campaign not found");
+  assertEditableCampaign(doc, userId);
+
+  const fundingAddress = await getCampaignWalletPublicKey(id);
+  const totalRequired = doc.payoutAmount * doc.maxClaims;
+  return { campaign: toEditable(doc), fundingAddress, totalRequired };
+}
+
+export async function updateCampaign(
+  id: string,
+  userId: string,
+  input: UpdateCampaignInput
+): Promise<{ campaign: CampaignEditable; fundingAddress: string; totalRequired: number }> {
+  const col = campaignsCollection();
+  const doc = await col.findOne({ id });
+  if (!doc) throw new NotFoundError("Campaign not found");
+  assertEditableCampaign(doc, userId);
+
+  const update: Partial<CampaignDoc> = {};
+
+  if (typeof input.name === "string") {
+    const name = input.name.trim();
+    if (name.length < 2) throw new BadRequestError("Campaign name required");
+    update.name = name;
+  }
+
+  if (typeof input.description === "string") {
+    const description = input.description.trim();
+    update.description = description || undefined;
+  }
+
+  if (typeof input.payoutAmount === "number") {
+    if (!input.payoutAmount || input.payoutAmount <= 0) throw new BadRequestError("Invalid payoutAmount");
+    update.payoutAmount = input.payoutAmount;
+  }
+
+  if (typeof input.maxClaims === "number") {
+    if (!input.maxClaims || input.maxClaims <= 0) throw new BadRequestError("Invalid maxClaims");
+    if (doc.claimCount > input.maxClaims) throw new BadRequestError("maxClaims less than existing claims");
+    update.maxClaims = input.maxClaims;
+  }
+
+  if (typeof input.expiresAt === "number") {
+    if (input.expiresAt <= Date.now() / 1000) throw new BadRequestError("Invalid expiresAt");
+    update.expiresAt = input.expiresAt;
+    if (doc.type === "escrow" && input.winnersDeadline === undefined && doc.winnersDeadline) {
+      if (doc.winnersDeadline >= input.expiresAt) {
+        throw new BadRequestError("winnersDeadline must be before expiresAt");
+      }
+    }
+  }
+
+  if (input.winnersDeadline !== undefined) {
+    if (doc.type === "escrow") {
+      if (input.winnersDeadline === null) {
+        update.winnersDeadline = undefined;
+      } else if (typeof input.winnersDeadline === "number") {
+        const expiresAt = typeof update.expiresAt === "number" ? update.expiresAt : doc.expiresAt;
+        if (!input.winnersDeadline || input.winnersDeadline >= expiresAt) {
+          throw new BadRequestError("winnersDeadline must be before expiresAt");
+        }
+        update.winnersDeadline = input.winnersDeadline;
+      }
+    } else {
+      update.winnersDeadline = undefined;
+    }
+  }
+
+  if (input.refundAddress !== undefined) {
+    if (!input.refundAddress) {
+      update.refundAddress = undefined;
+    } else {
+      update.refundAddress = input.refundAddress;
+    }
+  }
+
+  if (input.theme !== undefined) {
+    update.theme = input.theme;
+  }
+
+  if (Object.keys(update).length > 0) {
+    await col.updateOne({ id }, { $set: update });
+  }
+
+  const updated = await col.findOne({ id });
+  if (!updated) throw new NotFoundError("Campaign not found");
+
+  const fundingAddress = await getCampaignWalletPublicKey(id);
+  const totalRequired = updated.payoutAmount * updated.maxClaims;
+  return { campaign: toEditable(updated), fundingAddress, totalRequired };
+}
+
 export async function checkFunding(
   id: string
 ): Promise<{
@@ -95,34 +207,99 @@ export async function checkFunding(
 
   const totalRequired = doc.payoutAmount * doc.maxClaims;
   const campaignWallet = await getCampaignWalletPublicKey(id);
-  let onChainBalance = await connection.getBalance(new PublicKey(campaignWallet));
-  let pcBalance = await getCampaignPrivateBalance(id);
+  let onChainBalance = 0;
+  let pcBalance = 0;
+  const warnings: string[] = [];
+  let onChainFresh = true;
+  let privacyFresh = true;
+
+  try {
+    onChainBalance = await connection.getBalance(new PublicKey(campaignWallet));
+  } catch (error) {
+    onChainFresh = false;
+    warnings.push(
+      error instanceof Error ? `On-chain balance check failed: ${error.message}` : "On-chain balance check failed"
+    );
+  }
+
+  try {
+    pcBalance = await getCampaignPrivateBalance(id);
+  } catch (error) {
+    privacyFresh = false;
+    pcBalance = doc.fundedAmount || 0;
+    warnings.push(
+      error instanceof Error
+        ? `Privacy Cash balance check failed: ${error.message}`
+        : "Privacy Cash balance check failed"
+    );
+  }
 
   // Auto-deposit if funds are on-chain but not in Privacy Cash
-  if (pcBalance < totalRequired) {
+  if (pcBalance < totalRequired && onChainFresh && privacyFresh) {
     if (onChainBalance > 0) {
-      const { signature } = await depositToCampaign(id, onChainBalance);
-      pcBalance = await getCampaignPrivateBalance(id);
-      onChainBalance = await connection.getBalance(new PublicKey(campaignWallet));
-      const funded = pcBalance >= totalRequired;
+      try {
+        const { signature } = await depositToCampaign(id, onChainBalance);
+        try {
+          pcBalance = await getCampaignPrivateBalance(id);
+        } catch (error) {
+          privacyFresh = false;
+          warnings.push(
+            error instanceof Error
+              ? `Privacy Cash balance check failed after deposit: ${error.message}`
+              : "Privacy Cash balance check failed after deposit"
+          );
+        }
+        try {
+          onChainBalance = await connection.getBalance(new PublicKey(campaignWallet));
+        } catch (error) {
+          onChainFresh = false;
+          warnings.push(
+            error instanceof Error
+              ? `On-chain balance check failed after deposit: ${error.message}`
+              : "On-chain balance check failed after deposit"
+          );
+        }
+        const funded = doc.funded || (privacyFresh ? pcBalance >= totalRequired : false);
 
-      if (funded && (!doc.funded || doc.status === "pending-funding")) {
-        const update: Partial<CampaignDoc> = { funded: true, fundedAmount: pcBalance };
-        if (doc.status === "pending-funding") update.status = "active";
-        await col.updateOne({ id }, { $set: update });
+        if (funded && (!doc.funded || doc.status === "pending-funding")) {
+          const update: Partial<CampaignDoc> = { funded: true, fundedAmount: pcBalance };
+          if (doc.status === "pending-funding") update.status = "active";
+          await col.updateOne({ id }, { $set: update });
+        }
+        return {
+          balance: pcBalance,
+          totalRequired,
+          funded,
+          depositTx: signature,
+          onChainBalance,
+          campaignWallet,
+          warnings,
+          onChainFresh,
+          privacyFresh,
+        };
+      } catch (error) {
+        warnings.push(error instanceof Error ? `Auto-deposit failed: ${error.message}` : "Auto-deposit failed");
       }
-      return { balance: pcBalance, totalRequired, funded, depositTx: signature, onChainBalance, campaignWallet };
     }
   }
 
-  const funded = pcBalance >= totalRequired;
+  const funded = doc.funded || (privacyFresh ? pcBalance >= totalRequired : false);
   if (funded && (!doc.funded || doc.status === "pending-funding")) {
     const update: Partial<CampaignDoc> = { funded: true, fundedAmount: pcBalance };
     if (doc.status === "pending-funding") update.status = "active";
     await col.updateOne({ id }, { $set: update });
   }
 
-  return { balance: pcBalance, totalRequired, funded, onChainBalance, campaignWallet };
+  return {
+    balance: pcBalance,
+    totalRequired,
+    funded,
+    onChainBalance,
+    campaignWallet,
+    warnings,
+    onChainFresh,
+    privacyFresh,
+  };
 }
 
 export async function isEligible(campaignId: string, identityHash: string): Promise<boolean> {
@@ -310,5 +487,24 @@ function toPublic(doc: CampaignDoc): CampaignPublic {
     disputeEndsAt: doc.disputeEndsAt,
     disputeOutcome: doc.disputeOutcome,
     voteResults: doc.voteResults,
+  };
+}
+
+function toEditable(doc: CampaignDoc): CampaignEditable {
+  return {
+    id: doc.id,
+    name: doc.name,
+    description: doc.description,
+    imageUrl: doc.imageUrl,
+    type: doc.type,
+    authMethod: doc.authMethod,
+    payoutAmount: doc.payoutAmount,
+    maxClaims: doc.maxClaims,
+    expiresAt: doc.expiresAt,
+    winnersDeadline: doc.winnersDeadline,
+    funded: doc.funded,
+    status: doc.status,
+    refundAddress: doc.refundAddress,
+    theme: doc.theme,
   };
 }

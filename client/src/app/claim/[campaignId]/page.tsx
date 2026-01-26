@@ -53,6 +53,12 @@ export default function ClaimPage() {
     return campaign.authMethod.charAt(0).toUpperCase() + campaign.authMethod.slice(1);
   }, [campaign]);
 
+  const formatSol = (lamports: number) =>
+    new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 9,
+    }).format(lamports / 1e9);
+
   const claimLockedReason = useMemo(() => {
     if (!campaign) return null;
     if (!campaign.funded) return "Funding in progress.";
@@ -319,7 +325,7 @@ export default function ClaimPage() {
                 {campaign.description || "Claim your payout securely without exposing wallets."}
               </p>
               <div className="mt-5 flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                <span>{(campaign.payoutAmount / 1e9).toFixed(2)} SOL per claim</span>
+                <span>{formatSol(campaign.payoutAmount)} SOL per claim</span>
                 <span>·</span>
                 <span>
                   {campaign.claimCount}/{campaign.maxClaims} claimed

@@ -16,6 +16,23 @@ export type CampaignSummary = {
   maxClaims?: number;
 };
 
+export type CampaignEditable = {
+  id: string;
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  type: "payout" | "escrow";
+  authMethod: "email" | "twitter" | "discord" | "github" | "telegram";
+  payoutAmount: number;
+  maxClaims: number;
+  expiresAt: number;
+  winnersDeadline?: number;
+  funded: boolean;
+  status: string;
+  refundAddress?: string;
+  theme?: CampaignTheme;
+};
+
 export type FundingStatus = {
   balance: number;
   totalRequired: number;
@@ -23,6 +40,9 @@ export type FundingStatus = {
   onChainBalance: number;
   campaignWallet: string;
   depositTx?: string;
+  warnings?: string[];
+  onChainFresh?: boolean;
+  privacyFresh?: boolean;
 };
 
 export type CreateCampaignInput = {
@@ -37,6 +57,17 @@ export type CreateCampaignInput = {
   recipients: string[];
   requireCompliance?: boolean;
   refundAddress?: string;
+  theme?: CampaignTheme;
+};
+
+export type UpdateCampaignInput = {
+  name?: string;
+  description?: string;
+  payoutAmount?: number;
+  maxClaims?: number;
+  expiresAt?: number;
+  winnersDeadline?: number | null;
+  refundAddress?: string | null;
   theme?: CampaignTheme;
 };
 
@@ -75,9 +106,49 @@ export async function getFundingAddress(campaignId: string): Promise<{
   return apiFetch(`/api/campaign/${campaignId}/funding-address`, {}, token);
 }
 
+export async function getCampaignForEdit(campaignId: string): Promise<{
+  campaign: CampaignEditable;
+  fundingAddress: string;
+  totalRequired: number;
+}> {
+  const token = getAuthToken();
+  return apiFetch(`/api/campaign/${campaignId}/edit`, {}, token);
+}
+
+export async function updateCampaign(
+  campaignId: string,
+  input: UpdateCampaignInput
+): Promise<{
+  campaign: CampaignEditable;
+  fundingAddress: string;
+  totalRequired: number;
+}> {
+  const token = getAuthToken();
+  return apiFetch(
+    `/api/campaign/${campaignId}/update`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    token
+  );
+}
+
 export async function checkFunding(campaignId: string): Promise<FundingStatus> {
   const token = getAuthToken();
   return apiFetch(`/api/campaign/${campaignId}/check-funding`, { method: "POST" }, token);
+}
+
+export async function addRecipients(campaignId: string, recipients: string[]): Promise<{ added: number }> {
+  const token = getAuthToken();
+  return apiFetch(
+    `/api/campaign/${campaignId}/recipients`,
+    {
+      method: "POST",
+      body: JSON.stringify({ recipients }),
+    },
+    token
+  );
 }
 
 export async function updateCampaignTheme(campaignId: string, theme: CampaignTheme) {

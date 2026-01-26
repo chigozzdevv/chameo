@@ -3,15 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  addRecipients,
   createCampaign,
   checkFunding,
+  getCampaignForEdit,
   listCampaigns,
+  updateCampaign,
   uploadCampaignImage,
   type CampaignSummary,
   type CampaignTheme,
   type FundingStatus,
 } from "@/lib/campaign";
-import type { PrivacyCashContext, WalletProvider } from "@/lib/privacy-cash";
+import type { PrivacyCashContext, WalletProvider, WithdrawEstimate } from "@/lib/privacy-cash";
 
 const filters = ["All", "Payout", "Escrow"];
 
@@ -41,6 +44,8 @@ export default function CampaignsPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -72,6 +77,7 @@ export default function CampaignsPage() {
   const [pcBalance, setPcBalance] = useState<number | null>(null);
   const [pcStatus, setPcStatus] = useState<string | null>(null);
   const [pcLoading, setPcLoading] = useState(false);
+  const [withdrawEstimate, setWithdrawEstimate] = useState<WithdrawEstimate | null>(null);
   const [depositLoading, setDepositLoading] = useState(false);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
 
@@ -98,6 +104,7 @@ export default function CampaignsPage() {
     setShowCreate(true);
     setStep(1);
     setStatus(null);
+    setEditingCampaignId(null);
     setCreatedCampaign(null);
     setFunding(null);
     setWallet(null);
@@ -116,6 +123,26 @@ export default function CampaignsPage() {
     setPreview(imageUrl || null);
   }, [imageFile, imageUrl]);
 
+  useEffect(() => {
+    let active = true;
+    if (!createdCampaign) {
+      setWithdrawEstimate(null);
+      return;
+    }
+    (async () => {
+      try {
+        const { getWithdrawEstimate } = await loadPrivacyCashModule();
+        const estimate = await getWithdrawEstimate(createdCampaign.totalRequired);
+        if (active) setWithdrawEstimate(estimate);
+      } catch {
+        if (active) setWithdrawEstimate(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [createdCampaign]);
+
   const filteredCampaigns = useMemo(() => {
     if (filter === "All") return campaigns;
     const type = filter.toLowerCase();
@@ -128,6 +155,8 @@ export default function CampaignsPage() {
       .map((value) => value.trim())
       .filter(Boolean);
 
+  const toLamports = (value: string) => Math.round(Number(value) * 1e9);
+
   const parseLocalDateTime = (value: string) => {
     if (!value) return null;
     const [datePart, timePart] = value.split("T");
@@ -138,14 +167,41 @@ export default function CampaignsPage() {
     return new Date(year, month - 1, day, hour, minute, 0);
   };
 
+  const formatLocalDateTime = (timestamp?: number) => {
+    if (!timestamp) return "";
+    const date = new Date(timestamp * 1000);
+    const pad = (value: number) => value.toString().padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+      date.getHours()
+    )}:${pad(date.getMinutes())}`;
+  };
+
+  const formatSolInput = (lamports: number) => {
+    const value = lamports / 1e9;
+    const fixed = value.toFixed(9);
+    return fixed.replace(/\.?0+$/, "");
+  };
+
   const recipientsList = useMemo(() => parseRecipients(), [form.recipients]);
-  const formatSol = (lamports: number) => (lamports / 1e9).toFixed(2);
+  const isEditing = editingCampaignId !== null;
+  const formatSol = (lamports: number) =>
+    new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 9,
+    }).format(lamports / 1e9);
   const campaignLink = useMemo(() => {
     if (!createdCampaign || typeof window === "undefined") return "";
     return `${window.location.origin}/claim/${createdCampaign.id}`;
   }, [createdCampaign]);
+  const requiredLamports = createdCampaign?.totalRequired ?? 0;
+  const withdrawTargetLamports = withdrawEstimate?.requestedLamports ?? requiredLamports;
+  const withdrawFeeLamports = withdrawEstimate?.feeLamports ?? 0;
+  const withdrawNetLamports = withdrawEstimate?.netLamports ?? requiredLamports;
+  const depositTargetLamports =
+    withdrawTargetLamports > 0 ? withdrawTargetLamports : requiredLamports;
+  const fundingWarning = funding?.warnings?.length ? funding.warnings.join(" | ") : null;
   const hasPrivacyBalance =
-    !!createdCampaign && pcBalance !== null && pcBalance >= createdCampaign.totalRequired;
+    !!createdCampaign && pcBalance !== null && pcBalance >= depositTargetLamports;
   const authHint = useMemo(() => {
     switch (form.authMethod) {
       case "email":
@@ -186,8 +242,13 @@ export default function CampaignsPage() {
       setStatus("Campaign name is required.");
       return false;
     }
-    if (!form.payoutAmount || Number.isNaN(Number(form.payoutAmount))) {
+    const payoutSol = Number(form.payoutAmount);
+    if (!form.payoutAmount || Number.isNaN(payoutSol) || payoutSol <= 0) {
       setStatus("Payout amount is required.");
+      return false;
+    }
+    if (toLamports(form.payoutAmount) <= 0) {
+      setStatus("Payout amount is too small.");
       return false;
     }
     if (!form.maxClaims || Number.isNaN(Number(form.maxClaims))) {
@@ -219,7 +280,11 @@ export default function CampaignsPage() {
       }
     }
     const recipients = parseRecipients();
-    if (!recipients.length) {
+    if (!isEditing && !recipients.length) {
+      setStatus("Add at least one recipient.");
+      return false;
+    }
+    if (isEditing && form.recipients && !recipients.length) {
       setStatus("Add at least one recipient.");
       return false;
     }
@@ -236,6 +301,8 @@ export default function CampaignsPage() {
     setShowCreate(false);
     setStep(1);
     setStatus(null);
+    setEditingCampaignId(null);
+    setEditLoading(false);
     setCreatedCampaign(null);
     setFunding(null);
     setCopiedFunding(false);
@@ -246,10 +313,63 @@ export default function CampaignsPage() {
     setPcBalance(null);
     setPcStatus(null);
     setPcLoading(false);
+    setWithdrawEstimate(null);
     setDepositLoading(false);
     setWithdrawLoading(false);
     if (searchParams.get("create") === "1") {
       router.replace("/dashboard/campaigns");
+    }
+  };
+
+  const handleEditCampaign = async (campaignId: string) => {
+    setShowCreate(true);
+    setStep(1);
+    setStatus("Loading campaign...");
+    setEditingCampaignId(campaignId);
+    setEditLoading(true);
+    setCreatedCampaign(null);
+    setFunding(null);
+    setCopiedFunding(false);
+    setCopiedLink(false);
+    setWallet(null);
+    setWalletError(null);
+    setPcContext(null);
+    setPcBalance(null);
+    setPcStatus(null);
+    setPcLoading(false);
+    setWithdrawEstimate(null);
+    setDepositLoading(false);
+    setWithdrawLoading(false);
+
+    try {
+      const result = await getCampaignForEdit(campaignId);
+      const campaign = result.campaign;
+      setForm({
+        name: campaign.name || "",
+        description: campaign.description || "",
+        type: campaign.type,
+        authMethod: campaign.authMethod,
+        payoutAmount: formatSolInput(campaign.payoutAmount),
+        maxClaims: campaign.maxClaims.toString(),
+        expiresAt: formatLocalDateTime(campaign.expiresAt),
+        winnersDeadline: formatLocalDateTime(campaign.winnersDeadline),
+        recipients: "",
+        refundAddress: campaign.refundAddress || "",
+      });
+      setTheme({ ...themeDefaults, ...(campaign.theme || {}) });
+      setImageFile(null);
+      setImageUrl(campaign.imageUrl || "");
+      setCreatedCampaign({
+        id: campaign.id,
+        fundingAddress: result.fundingAddress,
+        totalRequired: result.totalRequired,
+      });
+      setStatus(null);
+      await refreshFunding(campaignId);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to load campaign.");
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -288,60 +408,102 @@ export default function CampaignsPage() {
         return;
       }
       const expiresAt = Math.floor(expiresDate.getTime() / 1000);
-      const winnersDeadline =
-        form.type === "escrow" && form.winnersDeadline
+      const winnersDeadlineValue =
+        form.type === "escrow"
           ? (() => {
+              if (!form.winnersDeadline) return null;
               const winnersDate = parseLocalDateTime(form.winnersDeadline);
-              return winnersDate ? Math.floor(winnersDate.getTime() / 1000) : undefined;
+              return winnersDate ? Math.floor(winnersDate.getTime() / 1000) : null;
             })()
-          : undefined;
+          : null;
+      const payoutAmountLamports = toLamports(form.payoutAmount);
 
-      const result = await createCampaign({
-        name: form.name.trim(),
-        description: form.description.trim() || undefined,
-        type: form.type as "payout" | "escrow",
-        authMethod: form.authMethod as "email" | "twitter" | "discord" | "github" | "telegram",
-        payoutAmount: Number(form.payoutAmount),
-        maxClaims: Number(form.maxClaims),
-        expiresAt,
-        winnersDeadline,
-        recipients,
-        requireCompliance: true,
-        refundAddress: form.refundAddress.trim() || undefined,
-        theme,
-      });
+      if (editingCampaignId) {
+        const result = await updateCampaign(editingCampaignId, {
+          name: form.name.trim(),
+          description: form.description.trim(),
+          payoutAmount: payoutAmountLamports,
+          maxClaims: Number(form.maxClaims),
+          expiresAt,
+          winnersDeadline: winnersDeadlineValue,
+          refundAddress: form.refundAddress.trim() || null,
+          theme,
+        });
 
-      if (imageFile || imageUrl) {
-        await uploadCampaignImage(result.campaignId, { file: imageFile, imageUrl });
+        if (imageFile || imageUrl) {
+          await uploadCampaignImage(editingCampaignId, { file: imageFile, imageUrl });
+        }
+
+        if (recipients.length) {
+          await addRecipients(editingCampaignId, recipients);
+        }
+
+        const updated = await listCampaigns();
+        setCampaigns(updated);
+        setCreatedCampaign({
+          id: editingCampaignId,
+          fundingAddress: result.fundingAddress,
+          totalRequired: result.totalRequired,
+        });
+        setStatus(null);
+        setStep(3);
+        await refreshFunding(editingCampaignId);
+      } else {
+        const winnersDeadline =
+          form.type === "escrow" && winnersDeadlineValue !== null ? winnersDeadlineValue : undefined;
+        const result = await createCampaign({
+          name: form.name.trim(),
+          description: form.description.trim() || undefined,
+          type: form.type as "payout" | "escrow",
+          authMethod: form.authMethod as "email" | "twitter" | "discord" | "github" | "telegram",
+          payoutAmount: payoutAmountLamports,
+          maxClaims: Number(form.maxClaims),
+          expiresAt,
+          winnersDeadline,
+          recipients,
+          requireCompliance: true,
+          refundAddress: form.refundAddress.trim() || undefined,
+          theme,
+        });
+
+        if (imageFile || imageUrl) {
+          await uploadCampaignImage(result.campaignId, { file: imageFile, imageUrl });
+        }
+
+        const updated = await listCampaigns();
+        setCampaigns(updated);
+        setCreatedCampaign({
+          id: result.campaignId,
+          fundingAddress: result.fundingAddress,
+          totalRequired: result.totalRequired,
+        });
+        setStatus(null);
+        setStep(3);
+        await refreshFunding(result.campaignId);
+        setForm({
+          name: "",
+          description: "",
+          type: "payout",
+          authMethod: "email",
+          payoutAmount: "",
+          maxClaims: "",
+          expiresAt: "",
+          winnersDeadline: "",
+          recipients: "",
+          refundAddress: "",
+        });
+        setImageFile(null);
+        setImageUrl("");
+        setTheme(themeDefaults);
       }
-
-      const updated = await listCampaigns();
-      setCampaigns(updated);
-      setCreatedCampaign({
-        id: result.campaignId,
-        fundingAddress: result.fundingAddress,
-        totalRequired: result.totalRequired,
-      });
-      setStatus(null);
-      setStep(3);
-      await refreshFunding(result.campaignId);
-      setForm({
-        name: "",
-        description: "",
-        type: "payout",
-        authMethod: "email",
-        payoutAmount: "",
-        maxClaims: "",
-        expiresAt: "",
-        winnersDeadline: "",
-        recipients: "",
-        refundAddress: "",
-      });
-      setImageFile(null);
-      setImageUrl("");
-      setTheme(themeDefaults);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Campaign creation failed.");
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : editingCampaignId
+          ? "Campaign update failed."
+          : "Campaign creation failed."
+      );
     } finally {
       setLoading(false);
     }
@@ -359,7 +521,10 @@ export default function CampaignsPage() {
       await provider.connect();
       const adapter: WalletProvider = {
         publicKey: provider.publicKey,
-        signMessage: provider.signMessage.bind(provider),
+        signMessage: async (message: Uint8Array) => {
+          const signed = await provider.signMessage(message);
+          return signed?.signature || signed;
+        },
         signTransaction: provider.signTransaction.bind(provider),
       };
       setWallet(adapter);
@@ -400,7 +565,14 @@ export default function CampaignsPage() {
     setPcStatus(null);
     try {
       const { depositToPrivacyCash, getPrivacyCashBalance } = await loadPrivacyCashModule();
-      const tx = await depositToPrivacyCash(pcContext, wallet, createdCampaign.totalRequired);
+      const targetLamports = depositTargetLamports || createdCampaign.totalRequired;
+      const currentBalance = pcBalance ?? 0;
+      const missingLamports = Math.max(0, targetLamports - currentBalance);
+      if (missingLamports <= 0) {
+        setPcStatus("Privacy Cash balance already covers the required amount.");
+        return;
+      }
+      const tx = await depositToPrivacyCash(pcContext, wallet, missingLamports);
       setPcStatus(`Deposit submitted: ${tx}`);
       const balance = await getPrivacyCashBalance(pcContext, wallet);
       setPcBalance(balance);
@@ -417,18 +589,27 @@ export default function CampaignsPage() {
     setPcStatus(null);
     try {
       const { withdrawToAddress, getPrivacyCashBalance } = await loadPrivacyCashModule();
+      const targetLamports = depositTargetLamports || createdCampaign.totalRequired;
       const result = await withdrawToAddress(
         pcContext,
         wallet,
         createdCampaign.fundingAddress,
-        createdCampaign.totalRequired
+        targetLamports
       );
       setPcStatus(`Withdraw submitted: ${result.tx}`);
       const balance = await getPrivacyCashBalance(pcContext, wallet);
       setPcBalance(balance);
       await refreshFunding(createdCampaign.id);
     } catch (error) {
-      setPcStatus(error instanceof Error ? error.message : "Privacy Cash withdraw failed.");
+      const message = error instanceof Error ? error.message : "Privacy Cash withdraw failed.";
+      if (/balance|utxo/i.test(message) && withdrawEstimate) {
+        setPcStatus(
+          `Withdrawal requires relayer fees (~${formatSol(withdrawFeeLamports)} SOL). ` +
+            `Deposit at least ${formatSol(withdrawTargetLamports)} SOL to cover fees.`
+        );
+      } else {
+        setPcStatus(message);
+      }
     } finally {
       setWithdrawLoading(false);
     }
@@ -459,6 +640,8 @@ export default function CampaignsPage() {
               setShowCreate(true);
               setStep(1);
               setStatus(null);
+              setEditingCampaignId(null);
+              setEditLoading(false);
               setCreatedCampaign(null);
               setFunding(null);
               setCopiedFunding(false);
@@ -469,6 +652,7 @@ export default function CampaignsPage() {
               setPcBalance(null);
               setPcStatus(null);
               setPcLoading(false);
+              setWithdrawEstimate(null);
               setDepositLoading(false);
               setWithdrawLoading(false);
             }}
@@ -515,9 +699,21 @@ export default function CampaignsPage() {
                       {campaign.name}
                     </h3>
                   </div>
-                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    {campaign.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {campaign.status === "pending-funding" ? (
+                      <button
+                        type="button"
+                        onClick={() => handleEditCampaign(campaign.id)}
+                        disabled={editLoading}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 disabled:opacity-60"
+                      >
+                        {editLoading ? "Loading" : "Edit"}
+                      </button>
+                    ) : null}
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      {campaign.status}
+                    </span>
+                  </div>
                 </div>
                 <p className="mt-3 text-xs text-slate-500">
                   ID: {campaign.id}
@@ -538,10 +734,10 @@ export default function CampaignsPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
-                  New campaign
+                  {isEditing ? "Edit campaign" : "New campaign"}
                 </p>
                 <h2 className="mt-2 text-lg font-semibold text-slate-900">
-                  Create a private payout or escrow
+                  {isEditing ? "Update campaign details" : "Create a private payout or escrow"}
                 </h2>
               </div>
               <button
@@ -606,7 +802,8 @@ export default function CampaignsPage() {
                     <select
                       value={form.type}
                       onChange={(event) => setForm((prev) => ({ ...prev, type: event.target.value }))}
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                      disabled={isEditing}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 disabled:opacity-60"
                     >
                       <option value="payout">Payout</option>
                       <option value="escrow">Escrow</option>
@@ -617,7 +814,8 @@ export default function CampaignsPage() {
                     <select
                       value={form.authMethod}
                       onChange={(event) => setForm((prev) => ({ ...prev, authMethod: event.target.value }))}
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+                      disabled={isEditing}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 disabled:opacity-60"
                     >
                       <option value="email">Email</option>
                       <option value="twitter">X (Twitter)</option>
@@ -629,7 +827,7 @@ export default function CampaignsPage() {
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="grid gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    Payout amount
+                    Payout amount (SOL)
                     <input
                       value={form.payoutAmount}
                       onChange={(event) => setForm((prev) => ({ ...prev, payoutAmount: event.target.value }))}
@@ -675,9 +873,11 @@ export default function CampaignsPage() {
                   ) : null}
                 </div>
                 <label className="grid gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  Eligible recipients
+                  {isEditing ? "Add recipients (optional)" : "Eligible recipients"}
                   <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    {authHint.helper}
+                    {isEditing
+                      ? "New recipients will be added. Existing recipients stay the same."
+                      : authHint.helper}
                   </span>
                   <textarea
                     value={form.recipients}
@@ -827,7 +1027,7 @@ export default function CampaignsPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: previewSecondary }}>
-                        <span>{form.payoutAmount || "0"} USDC per claim</span>
+                        <span>{form.payoutAmount || "0"} SOL per claim</span>
                         <span>·</span>
                         <span>{form.maxClaims || "0"} recipients</span>
                       </div>
@@ -836,7 +1036,7 @@ export default function CampaignsPage() {
                 </div>
               </div>
             ) : (
-              <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+              <div className="mt-6 grid gap-6 lg:grid-cols-2">
                 <div className="space-y-4 rounded-2xl border border-slate-200 bg-white/90 p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                     Privacy Cash funding
@@ -844,10 +1044,17 @@ export default function CampaignsPage() {
                   <div className="space-y-3 text-sm text-slate-600">
                     <p>
                       Deposit{" "}
-                      <strong>{createdCampaign ? formatSol(createdCampaign.totalRequired) : "—"} SOL</strong> into
+                      <strong>{createdCampaign ? formatSol(depositTargetLamports) : "—"} SOL</strong> into
                       Privacy Cash, then withdraw it to the campaign wallet. This breaks the on-chain link before
                       claims go live.
                     </p>
+                    {createdCampaign ? (
+                      <p className="text-xs text-slate-500">
+                        {withdrawEstimate
+                          ? `Includes ~${formatSol(withdrawFeeLamports)} SOL relayer fees so the campaign wallet receives ${formatSol(withdrawNetLamports)} SOL.`
+                          : `Campaign requires ${formatSol(requiredLamports)} SOL. Relayer fees apply on withdrawal.`}
+                      </p>
+                    ) : null}
                     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                         Creator wallet
@@ -879,7 +1086,7 @@ export default function CampaignsPage() {
                     </div>
                     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                        Privacy Cash balance
+                        Creator Privacy Cash balance
                       </p>
                       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-700">
                         <span>{pcBalance === null ? "—" : `${formatSol(pcBalance)} SOL`}</span>
@@ -905,12 +1112,17 @@ export default function CampaignsPage() {
                     </div>
                     {wallet && pcContext && !hasPrivacyBalance ? (
                       <p className="text-xs text-slate-500">
-                        Deposit enough to cover the required amount before withdrawing.
+                        Deposit at least {formatSol(depositTargetLamports)} SOL before withdrawing.
                       </p>
                     ) : null}
                     {pcStatus ? (
                       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
                         {pcStatus}
+                      </div>
+                    ) : null}
+                    {fundingWarning ? (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-700">
+                        {fundingWarning}
                       </div>
                     ) : null}
                   </div>
@@ -938,16 +1150,32 @@ export default function CampaignsPage() {
                         </div>
                       </div>
                       <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
-                        <span>On-chain wallet</span>
+                        <span>
+                          On-chain wallet
+                          {funding?.onChainFresh === false ? " (stale)" : ""}
+                        </span>
                         <span>{funding ? `${formatSol(funding.onChainBalance)} SOL` : "—"}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
-                        <span>Privacy Cash balance</span>
+                        <span>
+                          Campaign Privacy Cash balance
+                          {funding?.privacyFresh === false ? " (stale)" : ""}
+                        </span>
                         <span>{funding ? `${formatSol(funding.balance)} SOL` : "—"}</span>
                       </div>
+                      {withdrawEstimate ? (
+                        <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
+                          <span>Relayer fee (est.)</span>
+                          <span>{formatSol(withdrawFeeLamports)} SOL</span>
+                        </div>
+                      ) : null}
                       <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
-                        <span>Required</span>
-                        <span>{createdCampaign ? `${formatSol(createdCampaign.totalRequired)} SOL` : "—"}</span>
+                        <span>Total to deposit</span>
+                        <span>{createdCampaign ? `${formatSol(depositTargetLamports)} SOL` : "—"}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
+                        <span>Required (net)</span>
+                        <span>{createdCampaign ? `${formatSol(requiredLamports)} SOL` : "—"}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
                         <span>Status</span>
@@ -1025,7 +1253,7 @@ export default function CampaignsPage() {
                     disabled={loading}
                     className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    Create campaign
+                    {isEditing ? "Update campaign" : "Create campaign"}
                   </button>
                 </>
               ) : (
