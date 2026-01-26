@@ -39,6 +39,7 @@ export default function AnalyticsPage() {
   const [handles, setHandles] = useState<AnalyticsHandles | null>(null);
   const [metrics, setMetrics] = useState<DecryptedMetrics | null>(null);
   const [loading, setLoading] = useState(false);
+  const [decrypting, setDecrypting] = useState(false);
   const [wallet, setWallet] = useState<WalletAdapter | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
 
@@ -118,8 +119,9 @@ export default function AnalyticsPage() {
 
   const decryptWithWallet = async () => {
     const token = getAuthToken();
-    if (!token || !activeCampaignId || !wallet || !handles) return;
+    if (!token || !activeCampaignId || !wallet || !handles || decrypting) return;
     setLoading(true);
+    setDecrypting(true);
     setWalletError(null);
     try {
       await apiFetch(
@@ -137,6 +139,7 @@ export default function AnalyticsPage() {
     } catch (error) {
       setWalletError("Unable to decrypt analytics.");
     } finally {
+      setDecrypting(false);
       setLoading(false);
     }
   };
@@ -198,10 +201,10 @@ export default function AnalyticsPage() {
             ) : (
               <button
                 onClick={decryptWithWallet}
-                disabled={!handles}
+                disabled={!handles || decrypting || loading}
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Decrypt analytics
+                {decrypting ? "Decrypting..." : "Decrypt analytics"}
               </button>
             )}
           </div>

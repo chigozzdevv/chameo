@@ -18,6 +18,7 @@ import {
   depositToCampaign,
   withdrawFromCampaign,
 } from "./wallet.service";
+import { getWithdrawEstimate } from "@/lib/privacy-cash";
 import { initializeAnalyticsForCampaign } from "@/modules/analytics";
 
 const NULLIFIER_ACCOUNT_SIZE = 9;
@@ -30,6 +31,16 @@ async function getAutoDepositBufferLamports(): Promise<number> {
   const rent = await connection.getMinimumBalanceForRentExemption(NULLIFIER_ACCOUNT_SIZE);
   cachedDepositBufferLamports = rent * NULLIFIER_ACCOUNT_COUNT + AUTO_DEPOSIT_TX_FEE_LAMPORTS;
   return cachedDepositBufferLamports;
+}
+
+async function getTotalRequiredLamports(campaign: CampaignDoc): Promise<number> {
+  const baseRequired = campaign.payoutAmount * campaign.maxClaims;
+  try {
+    const estimate = await getWithdrawEstimate(campaign.payoutAmount);
+    return estimate.requestedLamports * campaign.maxClaims;
+  } catch {
+    return baseRequired;
+  }
 }
 
 export async function createCampaign(
@@ -115,7 +126,7 @@ export async function getCampaignForEdit(
   assertEditableCampaign(doc, userId);
 
   const fundingAddress = await getCampaignWalletPublicKey(id);
-  const totalRequired = doc.payoutAmount * doc.maxClaims;
+  const totalRequired = await getTotalRequiredLamports(doc);
   return { campaign: toEditable(doc), fundingAddress, totalRequired };
 }
 
@@ -199,7 +210,7 @@ export async function updateCampaign(
   if (!updated) throw new NotFoundError("Campaign not found");
 
   const fundingAddress = await getCampaignWalletPublicKey(id);
-  const totalRequired = updated.payoutAmount * updated.maxClaims;
+  const totalRequired = await getTotalRequiredLamports(updated);
   return { campaign: toEditable(updated), fundingAddress, totalRequired };
 }
 
@@ -271,7 +282,7 @@ export async function checkFunding(
   const doc = await col.findOne({ id });
   if (!doc) throw new NotFoundError("Campaign not found");
 
-  const totalRequired = doc.payoutAmount * doc.maxClaims;
+  const totalRequired = await getTotalRequiredLamports(doc);
   const campaignWallet = await getCampaignWalletPublicKey(id);
   let onChainBalance = 0;
   let pcBalance = 0;
@@ -342,11 +353,10 @@ export async function checkFunding(
                 : "On-chain balance check failed after deposit"
             );
           }
-          const funded = doc.funded || (privacyFresh ? pcBalance >= totalRequired : false);
-
-          if (funded && (!doc.funded || doc.status === "pending-funding")) {
-            const update: Partial<CampaignDoc> = { funded: true, fundedAmount: pcBalance };
-            if (doc.status === "pending-funding") update.status = "active";
+          const funded = privacyFresh ? pcBalance >= totalRequired : false;
+          if (funded !== doc.funded || (funded && doc.status === "pending-funding")) {
+            const update: Partial<CampaignDoc> = { funded, fundedAmount: pcBalance };
+            if (funded && doc.status === "pending-funding") update.status = "active";
             await col.updateOne({ id }, { $set: update });
           }
           return {
@@ -367,10 +377,10 @@ export async function checkFunding(
     }
   }
 
-  const funded = doc.funded || (privacyFresh ? pcBalance >= totalRequired : false);
-  if (funded && (!doc.funded || doc.status === "pending-funding")) {
-    const update: Partial<CampaignDoc> = { funded: true, fundedAmount: pcBalance };
-    if (doc.status === "pending-funding") update.status = "active";
+  const funded = privacyFresh ? pcBalance >= totalRequired : false;
+  if (funded !== doc.funded || (funded && doc.status === "pending-funding")) {
+    const update: Partial<CampaignDoc> = { funded, fundedAmount: pcBalance };
+    if (funded && doc.status === "pending-funding") update.status = "active";
     await col.updateOne({ id }, { $set: update });
   }
 

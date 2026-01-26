@@ -48,6 +48,14 @@ export interface WithdrawResult {
   isPartial: boolean;
 }
 
+export interface WithdrawEstimate {
+  requestedLamports: number;
+  feeLamports: number;
+  netLamports: number;
+  feeRate: number;
+  rentFeeLamports: number;
+}
+
 export interface DepositResult {
   signature: string;
 }

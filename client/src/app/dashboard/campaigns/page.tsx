@@ -1359,7 +1359,7 @@ export default function CampaignsPage() {
                         <span>{createdCampaign ? `${formatSol(creatorDepositLamports)} SOL` : "—"}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">
-                        <span>Required (net)</span>
+                        <span>Required (incl. fees)</span>
                         <span>{createdCampaign ? `${formatSol(requiredLamports)} SOL` : "—"}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-2">

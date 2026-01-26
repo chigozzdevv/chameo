@@ -278,7 +278,7 @@ export default function DashboardPage() {
                       {fundingLoading ? "…" : funding ? `${formatSol(funding.balance)} SOL` : "—"}
                     </p>
                     <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                      Required {funding ? formatSol(funding.totalRequired) : "—"} SOL
+                      Required (incl. fees) {funding ? formatSol(funding.totalRequired) : "—"} SOL
                     </p>
                   </div>
                 </div>

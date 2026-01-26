@@ -13,7 +13,7 @@ import { WasmFactory, type LightWasm } from "@lightprotocol/hasher.rs";
 import { utils as ffUtils } from "ffjavascript";
 import BN from "bn.js";
 import { env, connection } from "@/config";
-import type { Utxo, UtxoKeypair, WalletKeys, WithdrawResult, DepositResult, RelayerConfig } from "./types";
+import type { Utxo, UtxoKeypair, WalletKeys, WithdrawResult, DepositResult, RelayerConfig, WithdrawEstimate } from "./types";
 import { MERKLE_TREE_DEPTH, SOL_MINT } from "./constants";
 import {
   deriveWalletKeys,
@@ -140,6 +140,29 @@ export async function withdraw(keys: WalletKeys, requestedAmount: number, recipi
   await waitForConfirmation(enc1.toString("hex"));
 
   return { signature: result.signature, amount, fee, recipient, isPartial };
+}
+
+export async function getWithdrawEstimate(targetLamports: number): Promise<WithdrawEstimate> {
+  const cfg = await fetchRelayerConfig();
+  const { withdrawFeeRate, withdrawRentFee } = normalizeRelayerConfig(cfg);
+  const rentFeeLamports = Math.round(withdrawRentFee * LAMPORTS_PER_SOL);
+  const target = Math.max(0, Math.floor(targetLamports));
+
+  if (target <= 0 || withdrawFeeRate >= 1) {
+    return {
+      requestedLamports: target,
+      feeLamports: 0,
+      netLamports: target,
+      feeRate: withdrawFeeRate,
+      rentFeeLamports,
+    };
+  }
+
+  const requestedLamports = Math.ceil((target + rentFeeLamports) / (1 - withdrawFeeRate));
+  const feeLamports = Math.floor(requestedLamports * withdrawFeeRate + rentFeeLamports);
+  const netLamports = Math.max(0, requestedLamports - feeLamports);
+
+  return { requestedLamports, feeLamports, netLamports, feeRate: withdrawFeeRate, rentFeeLamports };
 }
 
 export async function deposit(keys: WalletKeys, amount: number): Promise<DepositResult> {

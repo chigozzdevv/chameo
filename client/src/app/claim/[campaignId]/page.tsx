@@ -354,7 +354,14 @@ export default function ClaimPage() {
                 Eligibility uses the handle or email provided by the campaign creator.
               </p>
 
-              {campaign.authMethod === "email" ? (
+              {verification ? (
+                <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                  Eligibility verified.
+                  <span className="ml-2 text-xs font-semibold text-emerald-700">
+                    ID {verification.identityHash.slice(0, 10)}…
+                  </span>
+                </div>
+              ) : campaign.authMethod === "email" ? (
                 <div className="mt-6 grid gap-3">
                   <input
                     value={email}
@@ -383,12 +390,6 @@ export default function ClaimPage() {
                   </button>
                 </div>
               )}
-
-              {verification ? (
-                <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                  Eligibility verified.
-                </div>
-              ) : null}
             </div>
 
             <div className="rounded-[2rem] border border-white/70 bg-white/85 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.1)] backdrop-blur">
@@ -401,29 +402,34 @@ export default function ClaimPage() {
               <p className="mt-2 text-sm text-slate-600">
                 Compliance screening runs automatically before release.
               </p>
-              <div className="mt-6 grid gap-3">
-                <input
-                  value={walletAddress}
-                  onChange={(event) => setWalletAddress(event.target.value)}
-                  placeholder="Solana wallet address"
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={submitClaim}
-                  disabled={
-                    processing ||
-                    !verification ||
-                    claimStatus === "claimed" ||
-                    campaign.status === "closed" ||
-                    !campaign.funded ||
-                    (campaign.type === "escrow" && campaign.status !== "winners-announced")
-                  }
-                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                >
-                  {claimStatus === "claimed" ? "Already claimed" : "Claim payout"}
-                </button>
-              </div>
+              {verification ? (
+                <div className="mt-6 grid gap-3">
+                  <input
+                    value={walletAddress}
+                    onChange={(event) => setWalletAddress(event.target.value)}
+                    placeholder="Solana wallet address"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={submitClaim}
+                    disabled={
+                      processing ||
+                      claimStatus === "claimed" ||
+                      campaign.status === "closed" ||
+                      !campaign.funded ||
+                      (campaign.type === "escrow" && campaign.status !== "winners-announced")
+                    }
+                    className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {claimStatus === "claimed" ? "Already claimed" : "Claim payout"}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-6 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-xs font-semibold text-slate-500">
+                  Verify eligibility to unlock wallet input.
+                </div>
+              )}
               {claimLockedReason ? (
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-xs font-semibold text-slate-500">
                   {claimLockedReason}

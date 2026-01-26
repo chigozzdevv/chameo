@@ -1,8 +1,15 @@
-import { withdraw } from "@/lib/privacy-cash";
+import { withdraw, getWithdrawEstimate } from "@/lib/privacy-cash";
 import { BadRequestError, ConflictError } from "@/shared";
 import { trackEvent } from "@/modules/analytics";
 import { claimsCollection } from "./claim.model";
-import { getCampaignDoc, isEligible, incrementClaimCount, deductFunds, getCampaignWalletKeys } from "@/modules/campaign";
+import {
+  getCampaignDoc,
+  isEligible,
+  incrementClaimCount,
+  deductFunds,
+  getCampaignWalletKeys,
+  getCampaignPrivateBalance,
+} from "@/modules/campaign";
 import { checkWalletCompliance, type ComplianceCheckResult } from "@/modules/compliance";
 import { validateVerificationToken, consumeVerificationToken } from "./verification.service";
 
@@ -90,7 +97,16 @@ export async function processClaim(campaignId: string, token: string, walletAddr
     await trackEvent({ campaignId, eventType: "claim-attempt", identityHash });
 
     const keys = await getCampaignWalletKeys(campaignId);
-    const result = await withdraw(keys, campaign.payoutAmount, walletAddress);
+    const estimate = await getWithdrawEstimate(campaign.payoutAmount);
+    if (estimate.netLamports < campaign.payoutAmount) {
+      throw new BadRequestError("Unable to cover claim amount with current relayer fees");
+    }
+    const currentBalance = await getCampaignPrivateBalance(campaignId);
+    if (currentBalance < estimate.requestedLamports) {
+      throw new BadRequestError("Campaign balance too low to cover relayer fees");
+    }
+
+    const result = await withdraw(keys, estimate.requestedLamports, walletAddress);
 
     await claimsCollection().updateOne(
       { campaignId, identityHash },
