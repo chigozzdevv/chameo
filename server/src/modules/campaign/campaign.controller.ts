@@ -72,7 +72,7 @@ export async function handleCreateCampaign(req: Request, res: Response, next: Ne
       success: true,
       campaignId: result.campaign.id,
       fundingAddress: result.fundingAddress,
-      totalRequired: payoutAmount * maxClaims,
+      totalRequired: result.totalRequired,
     });
   } catch (error) {
     next(error);
@@ -119,10 +119,11 @@ export async function handleGetFundingAddress(req: Request<{ id: string }>, res:
     if (doc.userId !== req.user!.userId) throw new ForbiddenError();
 
     const fundingAddress = await getCampaignWalletPublicKey(id);
+    const totalRequired = await campaignService.getTotalRequiredLamports(doc);
     res.json({
       success: true,
       fundingAddress,
-      totalRequired: doc.payoutAmount * doc.maxClaims,
+      totalRequired,
     });
   } catch (error) {
     next(error);

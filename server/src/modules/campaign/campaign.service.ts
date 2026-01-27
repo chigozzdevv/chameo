@@ -33,7 +33,7 @@ async function getAutoDepositBufferLamports(): Promise<number> {
   return cachedDepositBufferLamports;
 }
 
-async function getTotalRequiredLamports(campaign: CampaignDoc): Promise<number> {
+export async function getTotalRequiredLamports(campaign: CampaignDoc): Promise<number> {
   const baseRequired = campaign.payoutAmount * campaign.maxClaims;
   try {
     const estimate = await getWithdrawEstimate(campaign.payoutAmount);
@@ -47,7 +47,7 @@ export async function createCampaign(
   userId: string,
   orgSlug: string,
   input: CreateCampaignInput
-): Promise<{ campaign: CampaignPublic; fundingAddress: string; identityHashes: string[] }> {
+): Promise<{ campaign: CampaignPublic; fundingAddress: string; identityHashes: string[]; totalRequired: number }> {
   const id = generateId();
   const identityHashes = input.recipients.map((r: string) => hashIdentity(input.authMethod, r).toString("hex"));
   const eligibilityRoot = (await buildMerkleRoot(identityHashes, env.zk.merkleDepth)).toString("hex");
@@ -92,7 +92,8 @@ export async function createCampaign(
     console.error("Failed to initialize on-chain analytics:", error);
   }
 
-  return { campaign: toPublic(doc), fundingAddress, identityHashes };
+  const totalRequired = await getTotalRequiredLamports(doc);
+  return { campaign: toPublic(doc), fundingAddress, identityHashes, totalRequired };
 }
 
 export async function getCampaign(id: string): Promise<CampaignPublic | null> {

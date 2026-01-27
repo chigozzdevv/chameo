@@ -1,4 +1,4 @@
-import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import { PublicKey, Keypair, SystemProgram, ComputeBudgetProgram } from "@solana/web3.js";
 import { Program, AnchorProvider, Wallet } from "@coral-xyz/anchor";
 import { devnetConnection, env } from "@/config";
 import { encryptValue } from "@inco/solana-sdk/encryption";
@@ -167,6 +167,7 @@ export async function castVoteZk(params: {
 
   const tx = await (program.methods as any)
     .castVoteZk(campaignIdBytes, Array.from(nullifier), proof, publicWitness, encryptedVote)
+    .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })])
     .accounts({
       nullifier: nullifierPda,
       votingPool,

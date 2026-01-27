@@ -20,6 +20,7 @@ import {
 import type { DepositEstimate, PrivacyCashContext, WalletProvider, WithdrawEstimate } from "@/lib/privacy-cash";
 
 const filters = ["All", "Payout", "Escrow"];
+const EXTRA_DEPOSIT_BUFFER_LAMPORTS = 200_000;
 
 const themeDefaults: CampaignTheme = {
   primary: "#0f172a",
@@ -155,6 +156,7 @@ export default function CampaignsPage() {
           rentBuffer = 0;
         }
         let deposit: DepositEstimate | null = null;
+        rentBuffer += EXTRA_DEPOSIT_BUFFER_LAMPORTS;
         let targetLamports = createdCampaign.totalRequired + rentBuffer;
         try {
           deposit = await getDepositEstimate(targetLamports);
@@ -238,7 +240,7 @@ export default function CampaignsPage() {
     if (!createdCampaign || typeof window === "undefined") return "";
     return `${window.location.origin}/claim/${createdCampaign.id}`;
   }, [createdCampaign]);
-  const requiredLamports = createdCampaign?.totalRequired ?? 0;
+  const requiredLamports = funding?.totalRequired ?? createdCampaign?.totalRequired ?? 0;
   const campaignTargetLamports = requiredLamports + depositBufferLamports;
   const depositFeeLamports = depositEstimate?.feeLamports ?? 0;
   const campaignDepositLamports = depositEstimate?.depositLamports ?? campaignTargetLamports;
@@ -472,6 +474,10 @@ export default function CampaignsPage() {
     try {
       const result = await checkFunding(campaignId);
       setFunding(result);
+      setCreatedCampaign((prev) => {
+        if (!prev || prev.id !== campaignId) return prev;
+        return { ...prev, totalRequired: result.totalRequired };
+      });
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to refresh funding.");
     } finally {
