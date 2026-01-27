@@ -22,7 +22,7 @@ const item = {
 
 const highlights = [
   "Hosts add claimants or escrow participants by handle or email, never by wallet address.",
-  "Noir ZK proofs keep voter wallets hidden while proving eligibility.",
+  "Noir ZK proofs keep voter identities hidden while proving eligibility.",
   "Privacy Cash breaks on-chain links between host, campaign, and claimant.",
   "Inco keeps dispute state and vote totals confidential until reveal.",
 ];

@@ -15,7 +15,7 @@ const stack = [
   },
   {
     name: "Aztec Noir",
-    description: "Proves eligibility without exposing voter wallets.",
+    description: "Proves eligibility without exposing voter identities.",
     accent: "from-emerald-300/70 via-teal-300/60 to-cyan-300/60",
   },
   {

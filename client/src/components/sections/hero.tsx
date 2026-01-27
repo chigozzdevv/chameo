@@ -49,7 +49,7 @@ export default function Hero() {
         className="mt-6 text-base text-slate-600 md:text-lg"
       >
         Privately pay anyone by email or social handle (X, Telegram, Discord)
-        without either party revealing a wallet—on-chain links stay broken. Run
+        without revealing wallets to each other—on-chain links stay broken. Run
         direct payouts or escrowed campaigns.
       </motion.p>
       <motion.div variants={item} className="mt-8 flex justify-center">

@@ -1,8 +1,8 @@
 # chameo.cash
 
-chameo.cash is a privacy-first, compliance-gated payout platform for campaigns that need unlinkable funding, private claim flows, and encrypted dispute resolution on Solana. Teams can run direct payouts or escrowed bounties/grants where claimants collect funds without either side seeing the other's wallet, with escrow releases handled later.
+chameo.cash is a privacy-first, compliance-gated payout platform on Solana. Teams can pay anyone by email or social handle (X, Telegram, Discord) using direct payouts or escrowed bounties/grants. Claimants verify eligibility and claim with their own wallet without revealing wallets to each other, while on-chain links stay broken.
 
-It routes payouts through Privacy Cash, encrypts votes and analytics with Inco Lightning, and uses Aztec Noir proofs plus a relayer to prove eligibility while breaking voter wallet linkage.
+Payouts route through Privacy Cash to break funding and claim linkability. Dispute votes and analytics are encrypted with Inco Lightning. Aztec Noir proofs (via a relayer) prove eligibility from hashed identities and enforce one-vote nullifiers during disputes.
 
 ## Stack
 
@@ -10,6 +10,7 @@ It routes payouts through Privacy Cash, encrypts votes and analytics with Inco L
 - Inco Lightning (encrypted on-chain state): `contracts/programs/chameo-privacy/`, `server/src/lib/inco/`
 - Aztec Noir + Sunspot (ZK eligibility + nullifier + relayered vote): `zk/noir/vote_eligibility/`
 - Range (compliance screening): `server/src/modules/compliance/`
+- Helius RPC (Solana connectivity): `SOLANA_RPC_URL`, `SOLANA_DEVNET_RPC_URL`
 
 ## Privacy Model
 
@@ -223,11 +224,29 @@ See `server/.env.example` for full list. Core keys:
 
 ## Development
 
+### Server
 ```bash
 cd server
 npm install
 cp .env.example .env
 npm run dev
+```
+
+### Client
+```bash
+cd client
+npm install
+# If the API is not on the same origin, set NEXT_PUBLIC_API_BASE_URL in client/.env.local.
+npm run dev
+```
+
+## Docker (server)
+
+Builds the production server image and compiles Noir artifacts. The Next.js client runs separately.
+
+```bash
+docker build -t chameo-server .
+docker run --rm -p 8080:8080 --env-file server/.env chameo-server
 ```
 
 ## Tests

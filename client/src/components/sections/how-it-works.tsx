@@ -48,7 +48,7 @@ const flows = [
       {
         title: "Pick winners or dispute",
         detail:
-          "If winners are missed, Noir proofs gate anonymous dispute votes.",
+          "If winners are missed, Noir proofs gate on-chain anonymous dispute votes.",
       },
       {
         title: "Encrypted outcome",
