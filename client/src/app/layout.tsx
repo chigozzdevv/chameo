@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Compliant private payouts with encrypted voting and analytics.",
   icons: {
     icon: [
-      { url: "/chameo-logo.png", type: "image/png" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
     ],
   },
 };
