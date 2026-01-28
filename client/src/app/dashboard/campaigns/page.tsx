@@ -83,6 +83,8 @@ export default function CampaignsPage() {
   const [pcContext, setPcContext] = useState<PrivacyCashContext | null>(null);
   const [pcBalance, setPcBalance] = useState<number | null>(null);
   const [pcStatus, setPcStatus] = useState<string | null>(null);
+  const [depositTx, setDepositTx] = useState<string | null>(null);
+  const [withdrawTx, setWithdrawTx] = useState<string | null>(null);
   const [pcLoading, setPcLoading] = useState(false);
   const [withdrawEstimate, setWithdrawEstimate] = useState<WithdrawEstimate | null>(null);
   const [depositEstimate, setDepositEstimate] = useState<DepositEstimate | null>(null);
@@ -123,6 +125,8 @@ export default function CampaignsPage() {
     setPcContext(null);
     setPcBalance(null);
     setPcStatus(null);
+    setDepositTx(null);
+    setWithdrawTx(null);
     setWithdrawEstimate(null);
     setDepositEstimate(null);
     setDepositBufferLamports(0);
@@ -368,6 +372,8 @@ export default function CampaignsPage() {
     setPcContext(null);
     setPcBalance(null);
     setPcStatus(null);
+    setDepositTx(null);
+    setWithdrawTx(null);
     setPcLoading(false);
     setWithdrawEstimate(null);
     setDepositEstimate(null);
@@ -395,6 +401,8 @@ export default function CampaignsPage() {
     setPcContext(null);
     setPcBalance(null);
     setPcStatus(null);
+    setDepositTx(null);
+    setWithdrawTx(null);
     setPcLoading(false);
     setWithdrawEstimate(null);
     setDepositEstimate(null);
@@ -617,6 +625,8 @@ export default function CampaignsPage() {
   const connectWallet = async () => {
     setWalletError(null);
     setPcStatus(null);
+    setDepositTx(null);
+    setWithdrawTx(null);
     const provider = (window as typeof window & { solana?: any }).solana;
     if (!provider?.connect || !provider?.signMessage || !provider?.signTransaction) {
       setWalletError("No wallet found. Install Phantom or another Solana wallet.");
@@ -668,6 +678,7 @@ export default function CampaignsPage() {
     if (!wallet || !pcContext || !createdCampaign) return;
     setDepositLoading(true);
     setPcStatus(null);
+    setDepositTx(null);
     try {
       const { depositToPrivacyCash, getPrivacyCashBalance } = await loadPrivacyCashModule();
       const targetLamports = creatorDepositLamports || createdCampaign.totalRequired;
@@ -678,7 +689,8 @@ export default function CampaignsPage() {
         return;
       }
       const tx = await depositToPrivacyCash(pcContext, wallet, missingLamports);
-      setPcStatus(`Deposit submitted: ${tx}`);
+      setPcStatus("Deposit submitted.");
+      setDepositTx(tx);
       const balance = await getPrivacyCashBalance(pcContext, wallet);
       setPcBalance(balance);
     } catch (error) {
@@ -692,6 +704,7 @@ export default function CampaignsPage() {
     if (!wallet || !pcContext || !createdCampaign) return;
     setWithdrawLoading(true);
     setPcStatus(null);
+    setWithdrawTx(null);
     try {
       const { withdrawToAddress, getPrivacyCashBalance } = await loadPrivacyCashModule();
       // Privacy Cash withdraw pre-fee amount so net matches the campaign target.
@@ -702,7 +715,8 @@ export default function CampaignsPage() {
         createdCampaign.fundingAddress,
         targetLamports
       );
-      setPcStatus(`Withdraw submitted: ${result.tx}`);
+      setPcStatus("Withdraw submitted.");
+      setWithdrawTx(result.tx);
       const balance = await getPrivacyCashBalance(pcContext, wallet);
       setPcBalance(balance);
       await refreshFunding(createdCampaign.id);
@@ -727,6 +741,7 @@ export default function CampaignsPage() {
   const previewPrimary = theme.primary || themeDefaults.primary;
   const previewSecondary = theme.secondary || themeDefaults.secondary;
   const previewBackground = theme.background || themeDefaults.background;
+  const solscanTxUrl = (signature: string) => `https://solscan.io/tx/${signature}`;
 
   return (
     <div className="space-y-6">
@@ -759,6 +774,8 @@ export default function CampaignsPage() {
               setPcContext(null);
               setPcBalance(null);
               setPcStatus(null);
+              setDepositTx(null);
+              setWithdrawTx(null);
               setPcLoading(false);
               setWithdrawEstimate(null);
               setDepositEstimate(null);
@@ -1297,6 +1314,42 @@ export default function CampaignsPage() {
                     {pcStatus ? (
                       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-600">
                         {pcStatus}
+                      </div>
+                    ) : null}
+                    {depositTx ? (
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <div className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          <span>Deposit tx</span>
+                          <a
+                            href={solscanTxUrl(depositTx)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500"
+                          >
+                            View on Solscan ↗
+                          </a>
+                        </div>
+                        <div className="mt-2 break-all text-xs font-semibold text-slate-700">
+                          {depositTx}
+                        </div>
+                      </div>
+                    ) : null}
+                    {withdrawTx ? (
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <div className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          <span>Withdraw tx</span>
+                          <a
+                            href={solscanTxUrl(withdrawTx)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500"
+                          >
+                            View on Solscan ↗
+                          </a>
+                        </div>
+                        <div className="mt-2 break-all text-xs font-semibold text-slate-700">
+                          {withdrawTx}
+                        </div>
                       </div>
                     ) : null}
                     {fundingWarning ? (

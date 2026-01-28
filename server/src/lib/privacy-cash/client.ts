@@ -77,24 +77,24 @@ export async function withdraw(keys: WalletKeys, requestedAmount: number, recipi
   // Calculate fees: percentage + rent
   let fee = Math.floor(requestedAmount * withdrawFeeRate + LAMPORTS_PER_SOL * withdrawRentFee);
   let amount = Math.floor(requestedAmount - fee);
-  const total = utxos.reduce((s, u) => s + u.amount.toNumber(), 0);
   let isPartial = false;
-
-  if (total < amount + fee) {
-    isPartial = true;
-    amount = total;
-    amount -= fee;
-  }
-
-  if (amount <= 0) throw new Error("Insufficient balance for withdrawal after fees");
 
   const { root, nextIndex } = await fetchTreeState();
   const recipientPk = new PublicKey(recipient);
 
-  // Use largest UTXO as input, create dummy if only one UTXO
+  // Use largest UTXOs as inputs, create dummy if only one UTXO
   const input1 = utxos[0];
   const input2 = utxos[1] || createUtxo(wasm, utxoKeypair);
   const inputs = [input1, input2];
+  const totalInput = input1.amount.add(input2.amount).toNumber();
+
+  if (totalInput <= 0) throw new Error("Insufficient balance for withdrawal after fees");
+  if (totalInput < amount + fee) {
+    isPartial = true;
+    amount = totalInput - fee;
+  }
+
+  if (amount <= 0) throw new Error("Insufficient balance for withdrawal after fees");
 
   const change = input1.amount.add(input2.amount).sub(new BN(amount)).sub(new BN(fee));
   const outputs = [createUtxo(wasm, utxoKeypair, change, nextIndex), createUtxo(wasm, utxoKeypair, new BN(0), nextIndex + 1)];

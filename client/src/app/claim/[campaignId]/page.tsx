@@ -71,6 +71,11 @@ export default function ClaimPage() {
     return null;
   }, [campaign]);
 
+  const explorerUrl = useMemo(() => {
+    if (!claimResult) return null;
+    return `https://solscan.io/tx/${claimResult}`;
+  }, [claimResult]);
+
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -437,7 +442,18 @@ export default function ClaimPage() {
               ) : null}
               {claimResult ? (
                 <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">
-                  Claim submitted: {claimResult}
+                  <div>Claim submitted.</div>
+                  {explorerUrl ? (
+                    <a
+                      href={explorerUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-semibold text-emerald-800"
+                    >
+                      View on Solscan ↗
+                    </a>
+                  ) : null}
+                  <div className="mt-2 break-all text-[11px] text-emerald-800/80">{claimResult}</div>
                 </div>
               ) : null}
             </div>
