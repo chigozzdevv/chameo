@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "chameo.cash",
+  title: "Chameo - Compliant private payouts",
   description: "Compliant private payouts with encrypted voting and analytics.",
+  icons: {
+    icon: [
+      { url: "/chameo-logo.png", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({
