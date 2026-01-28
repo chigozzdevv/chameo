@@ -2,7 +2,14 @@ import crypto from "crypto";
 import { Request, Response, NextFunction } from "express";
 import { isValidPublicKey, hashIdentity, BadRequestError } from "@/shared";
 import { authProviders } from "@/lib/auth-providers";
-import { verifyMagicLink, validateVerificationToken, createOAuthState, consumeOAuthState, createVerificationToken } from "./verification.service";
+import {
+  verifyMagicLink,
+  validateVerificationToken,
+  createOAuthState,
+  consumeOAuthState,
+  consumeOAuthStateByState,
+  createVerificationToken,
+} from "./verification.service";
 import { processClaim, getClaimStatus } from "./claim.service";
 import { trackEvent } from "@/modules/analytics";
 
@@ -103,6 +110,35 @@ export async function handleSocialCallback(req: Request<{ provider: string }>, r
     await trackEvent({ campaignId: oauthState.campaignId, eventType: "link-click", identityHash });
 
     res.json({ success: true, token, identityHash });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function handleSocialCallbackByState(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { code, state, authData } = req.body;
+    if (!state) throw new BadRequestError("state required");
+
+    const oauthState = await consumeOAuthStateByState(state);
+    const handler = authProviders[oauthState.provider];
+    if (!handler) throw new BadRequestError("Invalid provider");
+    if (oauthState.provider !== "telegram" && !code) throw new BadRequestError("code required");
+
+    const result = await handler.verify({
+      code,
+      redirectUri: oauthState.redirectUri,
+      codeVerifier: oauthState.codeVerifier,
+      authData,
+    });
+    if (!result.valid) throw new BadRequestError(result.error!);
+
+    const identityHash = hashIdentity(oauthState.provider, result.identifier!).toString("hex");
+    const token = await createVerificationToken(identityHash, oauthState.campaignId);
+
+    await trackEvent({ campaignId: oauthState.campaignId, eventType: "link-click", identityHash });
+
+    res.json({ success: true, token, identityHash, campaignId: oauthState.campaignId });
   } catch (error) {
     next(error);
   }

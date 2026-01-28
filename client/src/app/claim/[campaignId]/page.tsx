@@ -221,7 +221,7 @@ export default function ClaimPage() {
     setProcessing(true);
     setStatus(null);
     try {
-      const redirectUri = `${window.location.origin}/claim/${campaignId}`;
+      const redirectUri = `${window.location.origin}/claim/callback`;
       const response = await apiFetch<{ success: boolean; url: string }>(
         `/api/claim/verify/social/${campaign.authMethod}/url?campaignId=${campaignId}&redirectUri=${encodeURIComponent(
           redirectUri

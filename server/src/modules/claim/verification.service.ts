@@ -125,3 +125,22 @@ export async function consumeOAuthState(state: string, provider: string): Promis
     codeVerifier: doc.codeVerifier,
   };
 }
+
+export async function consumeOAuthStateByState(state: string): Promise<{
+  provider: string;
+  campaignId: string;
+  redirectUri: string;
+  codeVerifier?: string;
+}> {
+  const doc = await oauthStatesCollection().findOneAndDelete({ state });
+  if (!doc) throw new BadRequestError("Invalid or expired state");
+  if (doc.expiresAt < new Date()) {
+    throw new BadRequestError("State expired");
+  }
+  return {
+    provider: doc.provider,
+    campaignId: doc.campaignId,
+    redirectUri: doc.redirectUri,
+    codeVerifier: doc.codeVerifier,
+  };
+}
