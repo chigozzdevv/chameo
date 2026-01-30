@@ -1,16 +1,18 @@
 # chameo.cash
 
+Video Demo: https://youtu.be/JZMt14qAP-w
+
 chameo.cash is a privacy-first, compliance-gated payout platform on Solana. Teams can pay anyone by email or social handle (X, Telegram, Discord) using direct payouts or escrowed bounties/grants. Claimants verify eligibility and claim with their own wallet without revealing wallets to each other, while on-chain links stay broken.
 
 Payouts route through Privacy Cash to break funding and claim linkability. Dispute votes and analytics are encrypted with Inco Lightning. Aztec Noir proofs (via a relayer) prove eligibility from hashed identities and enforce one-vote nullifiers during disputes.
 
 ## Stack
 
-- Privacy Cash (unlinkable payments + relayer): `server/src/lib/privacy-cash/`
-- Inco Lightning (encrypted on-chain state): `contracts/programs/chameo-privacy/`, `server/src/lib/inco/`
-- Aztec Noir + Sunspot (ZK eligibility + nullifier + relayered vote): `zk/noir/vote_eligibility/`
-- Range (compliance screening): `server/src/modules/compliance/`
-- Helius RPC (Solana connectivity): `SOLANA_RPC_URL`, `SOLANA_DEVNET_RPC_URL`
+- Privacy Cash: unlinkable deposits/withdrawals for funding + payouts. Used in `server/src/lib/privacy-cash/` and `server/src/modules/campaign/wallet.service.ts`.
+- Inco Lightning: encrypted on-chain analytics + dispute vote totals. On-chain CPI in `contracts/programs/chameo-privacy/src/{voting,analytics}.rs`; server client in `server/src/lib/inco/`.
+- Aztec Noir + Sunspot: ZK eligibility (Merkle membership + nullifier + commitment). Circuit in `zk/noir/vote_eligibility/`; proof generation in `server/src/lib/zk/vote-prover.ts`; verifier invoked from `contracts/programs/chameo-privacy/src/voting.rs`.
+- Range: compliance screening for claim wallets. Logic in `server/src/modules/compliance/compliance.service.ts`, enforced in `server/src/modules/claim/claim.service.ts`.
+- Helius RPC: Solana RPC for mainnet/devnet in `server/src/config/solana.ts` via `SOLANA_RPC_URL` and `SOLANA_DEVNET_RPC_URL`.
 
 ## Privacy Model
 
@@ -118,6 +120,8 @@ chameo/
 3. `cast_vote_zk` verifies the proof on-chain and updates encrypted vote totals.
 4. Server decrypts totals with Inco attested decrypt for final outcome.
 
+Note: dispute resolution requires >=50% turnout of eligible identities unless forced by the server.
+
 ### Analytics (Inco)
 1. Server writes encrypted analytics counters on-chain.
 2. Creator is granted decrypt access to read totals.
@@ -214,13 +218,23 @@ assert.ok(!accountKeys.includes(voterA.publicKey.toBase58()));
 
 ## Configuration
 
-See `server/.env.example` for full list. Core keys:
+See `server/.env.example` for full list.
 
-- `INCO_SERVER_PRIVATE_KEY`: relayer signer for Inco voting.
-- `RANGE_API_KEY`: required for compliance screening.
-- `ZK_VERIFIER_PROGRAM_ID`: deployed verifier program.
-- `ZK_MERKLE_DEPTH`, `ZK_CIPHERTEXT_LENGTH`, `ZK_PROOF_LENGTH`, `ZK_PUBLIC_WITNESS_LENGTH`.
-- `PRIVACY_CASH_PROGRAM_ID`, `PRIVACY_CASH_RELAYER_URL`, `PRIVACY_CASH_FEE_RECIPIENT`, `PRIVACY_CASH_ALT_ADDRESS`.
+### Required for end-to-end flows
+- `WALLET_ENCRYPTION_KEY`: 32-byte hex key used to encrypt campaign wallet keys (required even in dev).
+- `RANGE_API_KEY`: compliance screening is enforced on every claim.
+- `INCO_SERVER_PRIVATE_KEY`: base64 secret key for the relayer (Inco voting + analytics).
+
+### Program IDs (Solana)
+- Chameo Privacy (Anchor) program ID (`INCO_PROGRAM_ID`):
+  - Devnet: `FsoGyYnvQDu5zXHmWHiyCxi7nWMr7RYxB1zGgz8ciJVM`
+- ZK verifier program (`ZK_VERIFIER_PROGRAM_ID`): `5uFcw2nQiT2Tf7Q1zx8swugXE9rWvBQ7a3btea7qUy2d`
+  - Update this after `sunspot deploy` using the pubkey from `zk/noir/vote_eligibility/target/vote_eligibility-keypair.json`.
+- Inco Lightning program ID (fixed in code + on-chain): `5sjEbPiqgZrYwR31ahR6Uk9wf5awoX61YGg7jExQSwaj`
+- Privacy Cash program ID (`PRIVACY_CASH_PROGRAM_ID`): `9fhQBbumKEFuXtMBDw8AaQyAjCorLGJQiS3skWZdQyQD`
+
+### ZK params
+- `ZK_MERKLE_DEPTH`, `ZK_CIPHERTEXT_LENGTH`, `ZK_PROOF_LENGTH`, `ZK_PUBLIC_WITNESS_LENGTH` must match the Noir constants in `zk/noir/vote_eligibility/src/main.nr`.
 
 ## Development
 
